@@ -5,7 +5,6 @@ from ta.trend import ema_indicator  # You can remove this if not using EMA
 import asyncio
 import nest_asyncio
 from telegram import Bot
-from plyer import notification
 from io import BytesIO
 import config  # Import the config module
 
@@ -65,10 +64,6 @@ async def send_telegram_message(symbol, message, image_buffer):
     # Check if the current message is the same as the previous one for this symbol
     if last_alert_messages.get(symbol) != message:
         await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-        notification.notify(
-            title='VWMA Cross Alert',
-            message=message,
-        )
         # Send image
         await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
         # Update the last alert message for this symbol
