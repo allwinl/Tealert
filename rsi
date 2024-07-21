@@ -102,7 +102,7 @@ async def main():
                 cross_over, cross_under = check_vwma_cross(historical_data)
 
                 if cross_over or cross_under:
-                    message = f'VWMA Cross detected on {symbol} ({interval}).'
+                    message = f'Cross detected on #{symbol}'
                     # Plot and get image buffer
                     image_buffer = plot_vwma_chart(historical_data, symbol)
                     await send_telegram_message(symbol, message, image_buffer)
@@ -111,7 +111,7 @@ async def main():
                 print(f"Error processing {symbol}: {e}")
 
         # Sleep for a specified interval before checking again
-        await asyncio.sleep(60)  # Adjust the sleep duration as needed
+        await asyncio.sleep(300)  # Adjust the sleep duration as needed
 
 # Initialize Telegram Bot
 telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
