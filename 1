@@ -36,8 +36,8 @@ def check_vwma_cross(df, short_period=12, long_period=26):
     df['vwma_short'] = calculate_vwma(df, short_period)
     df['vwma_long'] = calculate_vwma(df, long_period)
 
-    cross_over = df['vwma_short'][-1] > df['vwma_long'][-1] and df['vwma_short'][-2] <= df['vwma_long'][-2]
-    cross_under = df['vwma_short'][-1] < df['vwma_long'][-1] and df['vwma_short'][-2] >= df['vwma_long'][-2]
+    cross_over = df['vwma_short'][-2] > df['vwma_long'][-2] and df['vwma_short'][-3] <= df['vwma_long'][-3]
+    cross_under = df['vwma_short'][-2] < df['vwma_long'][-2] and df['vwma_short'][-3] >= df['vwma_long'][-3]
 
     return cross_over, cross_under
 
