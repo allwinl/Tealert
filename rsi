@@ -1,0 +1,123 @@
+import ccxt
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+import asyncio
+import nest_asyncio
+from telegram import Bot
+import config  # Import the config module
+
+interval = '1d'  # 1-day candlesticks
+
+# Initialize Binance client
+binance = ccxt.binance({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=100):
+    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate VWMA
+def calculate_vwma(df, period):
+    return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+
+# Function to calculate RSI
+def calculate_rsi(df, period):
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+# Function to check VWMA cross
+def check_vwma_cross(df, short_period=12, long_period=26):
+    df['vwma_short'] = calculate_vwma(df, short_period)
+    df['vwma_long'] = calculate_vwma(df, long_period)
+
+    cross_over = df['vwma_short'][-2] > df['vwma_long'][-2] and df['vwma_short'][-3] <= df['vwma_long'][-3]
+    cross_under = df['vwma_short'][-2] < df['vwma_long'][-2] and df['vwma_short'][-3] >= df['vwma_long'][-3]
+
+    return cross_over, cross_under
+
+# Function to plot VWMA chart, RSI and RSI's MA, then return image buffer
+def plot_vwma_chart(df, symbol):
+    # Calculate RSI and its moving average
+    df['rsi'] = calculate_rsi(df, period=14)
+    df['rsi_ma'] = df['rsi'].rolling(window=9).mean()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1]})
+
+    # Plotting the VWMA and price chart
+    ax1.plot(df.index, df['close'], label='Close Price', color='black')
+    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
+    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Price')
+    ax1.set_title(f'VWMA Crossover for {symbol}')
+    ax1.legend()
+
+    # Plotting the RSI and its moving average
+    ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
+    ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('RSI')
+    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.legend()
+
+    plt.tight_layout()
+
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+    return buf
+
+# Function to send Telegram message and image (now defined as async)
+async def send_telegram_message(symbol, message, image_buffer):
+    # Check if the current message is the same as the previous one for this symbol
+    if last_alert_messages.get(symbol) != message:
+        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+        # Send image
+        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+        # Update the last alert message for this symbol
+        last_alert_messages[symbol] = message
+
+# Main function (now defined as async)
+async def main():
+    while True:
+        for symbol in config.SELECTED_SYMBOLS:
+            try:
+                historical_data = get_historical_data(symbol, interval)
+                cross_over, cross_under = check_vwma_cross(historical_data)
+
+                if cross_over or cross_under:
+                    message = f'VWMA Cross detected on {symbol} ({interval}).'
+                    # Plot and get image buffer
+                    image_buffer = plot_vwma_chart(historical_data, symbol)
+                    await send_telegram_message(symbol, message, image_buffer)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Sleep for a specified interval before checking again
+        await asyncio.sleep(60)  # Adjust the sleep duration as needed
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
+
+# Use nest_asyncio to allow running asyncio in Jupyter notebooks
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
