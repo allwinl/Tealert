@@ -78,7 +78,7 @@ async def main():
         for trading_pair in all_trading_pairs:
             symbol = trading_pair['symbol']
             # Filter only spot trading pairs with USDT as the quote currency
-            if trading_pair['type'] == 'perpetual' and trading_pair['quote'] == 'USDT':
+            if trading_pair['type'] == 'spot' and trading_pair['quote'] == 'USDT':
                 try:
                     historical_data = get_historical_data(symbol, interval)
                     cross_over, cross_under = check_vwma_cross(historical_data)
