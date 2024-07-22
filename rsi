@@ -49,7 +49,7 @@ def check_vwma_cross(df, short_period=3, long_period=7):
     return cross_over, cross_under
 
 # Function to plot VWMA chart, RSI and RSI's MA, then return image buffer
-def plot_vwma_chart(df, symbol):
+def plot_vwma_chart(df, symbol, title):
     # Calculate RSI and its moving average
     df['rsi'] = calculate_rsi(df, period=14)
     df['rsi_ma'] = df['rsi'].rolling(window=9).mean()
@@ -62,7 +62,7 @@ def plot_vwma_chart(df, symbol):
     ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
     ax1.set_xlabel('Timestamp')
     ax1.set_ylabel('Price')
-    ax1.set_title(f'VWMA Crossover for {symbol}')
+    ax1.set_title(title)
     ax1.legend()
 
     # Plotting the RSI and its moving average
@@ -103,13 +103,15 @@ async def main():
 
                 if cross_over:
                     message = f'Cross over detected on #{symbol}'
+                    title = f'Cross Over for {symbol}'
                     # Plot and get image buffer
-                    image_buffer = plot_vwma_chart(historical_data, symbol)
+                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
                     await send_telegram_message(symbol, message, image_buffer)
                 elif cross_under:
                     message = f'Cross under detected on #{symbol}'
+                    title = f'Cross Under for {symbol}'
                     # Plot and get image buffer
-                    image_buffer = plot_vwma_chart(historical_data, symbol)
+                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
                     await send_telegram_message(symbol, message, image_buffer)
 
             except Exception as e:
