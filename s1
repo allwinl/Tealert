@@ -125,7 +125,7 @@ async def check_trading_pairs():
             continue  # Skip symbols that have already been alerted
 
         try:
-            historical_data = get_historical_data(symbol, interval='1d')
+            historical_data = get_historical_data(symbol, interval='1m')
             cross_over, cross_under = check_vwma_cross(historical_data)
 
             if cross_over or cross_under:
