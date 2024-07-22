@@ -101,8 +101,13 @@ async def main():
                 historical_data = get_historical_data(symbol, interval)
                 cross_over, cross_under = check_vwma_cross(historical_data)
 
-                if cross_over or cross_under:
-                    message = f'Cross detected on #{symbol}'
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    # Plot and get image buffer
+                    image_buffer = plot_vwma_chart(historical_data, symbol)
+                    await send_telegram_message(symbol, message, image_buffer)
+                elif cross_under:
+                    message = f'Cross under detected on #{symbol}'
                     # Plot and get image buffer
                     image_buffer = plot_vwma_chart(historical_data, symbol)
                     await send_telegram_message(symbol, message, image_buffer)
