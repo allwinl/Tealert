@@ -103,19 +103,33 @@ async def set_trading_pairs(update: Update, context: CallbackContext):
     global selected_symbols, alerted_symbols
     pairs = update.message.text.split(',')
     binance_symbols = get_binance_symbols()
-    selected_symbols = [pair.strip().upper() for pair in pairs]
+
+    # Convert pairs to uppercase and strip whitespace
+    new_symbols = [pair.strip().upper() for pair in pairs]
+
+    # Update selected symbols to include both new and existing symbols
+    selected_symbols_set = set(selected_symbols)  # Use a set to manage symbols
+    new_symbols_set = set(new_symbols)
+    selected_symbols_set.update(new_symbols_set)
 
     # Check if symbols are available on Binance
-    invalid_symbols = [symbol for symbol in selected_symbols if symbol not in binance_symbols]
-    valid_symbols = [symbol for symbol in selected_symbols if symbol in binance_symbols]
+    invalid_symbols = [symbol for symbol in selected_symbols_set if symbol not in binance_symbols]
+    valid_symbols = [symbol for symbol in selected_symbols_set if symbol in binance_symbols]
 
     if invalid_symbols:
         await update.message.reply_text(f'The following symbols are not available on Binance: {", ".join(invalid_symbols)}')
 
     if valid_symbols:
-        # Clear the alerted symbols for the new set of trading pairs
-        alerted_symbols = {symbol: False for symbol in valid_symbols}
-        await update.message.reply_text(f'Trading pairs updated to: {", ".join(valid_symbols)}')
+        # Update the alerted_symbols dictionary to include the new symbols
+        new_alerted_symbols = {symbol: alerted_symbols.get(symbol, False) for symbol in valid_symbols}
+        alerted_symbols.update(new_alerted_symbols)
+        selected_symbols[:] = valid_symbols  # Update selected_symbols with valid symbols
+        
+        # Notify user of the updated symbols list
+        updated_symbols_message = f'Trading pairs updated to: {", ".join(valid_symbols)}'
+        await update.message.reply_text(updated_symbols_message)
+
+        # Check the trading pairs
         await check_trading_pairs()
 
 # Function to check trading pairs and send alerts if conditions are met
@@ -125,7 +139,7 @@ async def check_trading_pairs():
             continue  # Skip symbols that have already been alerted
 
         try:
-            historical_data = get_historical_data(symbol, interval='1m')
+            historical_data = get_historical_data(symbol, interval='1m')  # Changed to 1-minute interval
             cross_over, cross_under = check_vwma_cross(historical_data)
 
             if cross_over or cross_under:
