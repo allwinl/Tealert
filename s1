@@ -18,6 +18,11 @@ alerted_symbols = {}
 # List to store selected symbols
 selected_symbols = []
 
+# Get the list of all trading pairs available on Binance
+def get_binance_symbols():
+    markets = binance.load_markets()
+    return list(markets.keys())
+
 # Function to get historical candlestick data
 def get_historical_data(symbol, interval, limit=100):
     ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
@@ -84,9 +89,10 @@ def plot_vwma_chart(df, symbol, title):
     return buf
 
 # Function to send Telegram message and image
-async def send_telegram_message(symbol, message, image_buffer):
+async def send_telegram_message(symbol, message, image_buffer=None):
     await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-    await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+    if image_buffer:
+        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
 
 # Handler for the /start command
 async def start(update: Update, context: CallbackContext):
@@ -96,11 +102,21 @@ async def start(update: Update, context: CallbackContext):
 async def set_trading_pairs(update: Update, context: CallbackContext):
     global selected_symbols, alerted_symbols
     pairs = update.message.text.split(',')
+    binance_symbols = get_binance_symbols()
     selected_symbols = [pair.strip().upper() for pair in pairs]
-    # Clear the alerted symbols for the new set of trading pairs
-    alerted_symbols = {symbol: False for symbol in selected_symbols}
-    await update.message.reply_text(f'Trading pairs updated to: {", ".join(selected_symbols)}')
-    await check_trading_pairs()
+
+    # Check if symbols are available on Binance
+    invalid_symbols = [symbol for symbol in selected_symbols if symbol not in binance_symbols]
+    valid_symbols = [symbol for symbol in selected_symbols if symbol in binance_symbols]
+
+    if invalid_symbols:
+        await update.message.reply_text(f'The following symbols are not available on Binance: {", ".join(invalid_symbols)}')
+
+    if valid_symbols:
+        # Clear the alerted symbols for the new set of trading pairs
+        alerted_symbols = {symbol: False for symbol in valid_symbols}
+        await update.message.reply_text(f'Trading pairs updated to: {", ".join(valid_symbols)}')
+        await check_trading_pairs()
 
 # Function to check trading pairs and send alerts if conditions are met
 async def check_trading_pairs():
