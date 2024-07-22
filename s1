@@ -84,10 +84,10 @@ def plot_vwma_chart(df, symbol, title):
     return buf
 
 # Function to send Telegram message and image
-def send_telegram_message(symbol, message, image_buffer):
+async def send_telegram_message(symbol, message, image_buffer):
     if last_alert_messages.get(symbol) != message:
-        telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-        telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
         last_alert_messages[symbol] = message
 
 # Handler for the /start command
@@ -100,10 +100,10 @@ async def set_trading_pairs(update: Update, context: CallbackContext):
     pairs = update.message.text.split(',')
     selected_symbols = [pair.strip().upper() for pair in pairs]
     await update.message.reply_text(f'Trading pairs updated to: {", ".join(selected_symbols)}')
-    check_trading_pairs()
+    await check_trading_pairs()
 
 # Function to check trading pairs and send alerts if conditions are met
-def check_trading_pairs():
+async def check_trading_pairs():
     for symbol in selected_symbols:
         try:
             historical_data = get_historical_data(symbol, interval='1d')
@@ -114,7 +114,7 @@ def check_trading_pairs():
                 title = f'Cross Over for {symbol}'
                 # Plot and get image buffer
                 image_buffer = plot_vwma_chart(historical_data, symbol, title)
-                send_telegram_message(symbol, message, image_buffer)
+                await send_telegram_message(symbol, message, image_buffer)
                 # Reset the alert status for the symbol
                 last_alert_messages.pop(symbol, None)
             elif cross_under:
@@ -122,7 +122,7 @@ def check_trading_pairs():
                 title = f'Cross Under for {symbol}'
                 # Plot and get image buffer
                 image_buffer = plot_vwma_chart(historical_data, symbol, title)
-                send_telegram_message(symbol, message, image_buffer)
+                await send_telegram_message(symbol, message, image_buffer)
                 # Reset the alert status for the symbol
                 last_alert_messages.pop(symbol, None)
 
