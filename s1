@@ -12,8 +12,8 @@ binance = ccxt.binance({
     'secret': config.API_SECRET,
 })
 
-# Dictionary to store the last alert messages for each symbol
-last_alert_messages = {}
+# Dictionary to store the symbols for which alerts have been sent
+alerted_symbols = {}
 
 # List to store selected symbols
 selected_symbols = []
@@ -85,10 +85,8 @@ def plot_vwma_chart(df, symbol, title):
 
 # Function to send Telegram message and image
 async def send_telegram_message(symbol, message, image_buffer):
-    if last_alert_messages.get(symbol) != message:
-        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
-        last_alert_messages[symbol] = message
+    await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+    await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
 
 # Handler for the /start command
 async def start(update: Update, context: CallbackContext):
@@ -96,35 +94,38 @@ async def start(update: Update, context: CallbackContext):
 
 # Handler for receiving trading pairs
 async def set_trading_pairs(update: Update, context: CallbackContext):
-    global selected_symbols
+    global selected_symbols, alerted_symbols
     pairs = update.message.text.split(',')
     selected_symbols = [pair.strip().upper() for pair in pairs]
+    # Clear the alerted symbols for the new set of trading pairs
+    alerted_symbols = {symbol: False for symbol in selected_symbols}
     await update.message.reply_text(f'Trading pairs updated to: {", ".join(selected_symbols)}')
     await check_trading_pairs()
 
 # Function to check trading pairs and send alerts if conditions are met
 async def check_trading_pairs():
     for symbol in selected_symbols:
+        if alerted_symbols.get(symbol):
+            continue  # Skip symbols that have already been alerted
+
         try:
             historical_data = get_historical_data(symbol, interval='1d')
             cross_over, cross_under = check_vwma_cross(historical_data)
 
-            if cross_over:
-                message = f'Cross over detected on #{symbol}'
-                title = f'Cross Over for {symbol}'
+            if cross_over or cross_under:
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    title = f'Cross Over for {symbol}'
+                else:
+                    message = f'Cross under detected on #{symbol}'
+                    title = f'Cross Under for {symbol}'
+                
                 # Plot and get image buffer
                 image_buffer = plot_vwma_chart(historical_data, symbol, title)
                 await send_telegram_message(symbol, message, image_buffer)
-                # Reset the alert status for the symbol
-                last_alert_messages.pop(symbol, None)
-            elif cross_under:
-                message = f'Cross under detected on #{symbol}'
-                title = f'Cross Under for {symbol}'
-                # Plot and get image buffer
-                image_buffer = plot_vwma_chart(historical_data, symbol, title)
-                await send_telegram_message(symbol, message, image_buffer)
-                # Reset the alert status for the symbol
-                last_alert_messages.pop(symbol, None)
+
+                # Mark this symbol as alerted
+                alerted_symbols[symbol] = True
 
         except Exception as e:
             print(f"Error processing {symbol}: {e}")
