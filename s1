@@ -132,7 +132,7 @@ async def check_trading_pairs():
     symbols_to_remove = []
     for symbol in selected_symbols:
         try:
-            historical_data = get_historical_data(symbol, interval='1m')  # Changed to 1-minute interval
+            historical_data = get_historical_data(symbol, interval='4h')  # Changed to 1-minute interval
             cross_over, cross_under = check_vwma_cross(historical_data)
 
             if cross_over or cross_under:
