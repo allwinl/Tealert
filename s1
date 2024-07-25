@@ -12,9 +12,6 @@ binance = ccxt.binance({
     'secret': config.API_SECRET,
 })
 
-# Dictionary to store the symbols for which alerts have been sent
-alerted_symbols = {}
-
 # List to store selected symbols
 selected_symbols = []
 
@@ -100,7 +97,7 @@ async def start(update: Update, context: CallbackContext):
 
 # Handler for receiving trading pairs
 async def set_trading_pairs(update: Update, context: CallbackContext):
-    global selected_symbols, alerted_symbols
+    global selected_symbols
     pairs = update.message.text.split(',')
     binance_symbols = get_binance_symbols()
 
@@ -120,9 +117,6 @@ async def set_trading_pairs(update: Update, context: CallbackContext):
         await update.message.reply_text(f'The following symbols are not available on Binance: {", ".join(invalid_symbols)}')
 
     if valid_symbols:
-        # Update the alerted_symbols dictionary to include the new symbols
-        new_alerted_symbols = {symbol: alerted_symbols.get(symbol, False) for symbol in valid_symbols}
-        alerted_symbols.update(new_alerted_symbols)
         selected_symbols[:] = valid_symbols  # Update selected_symbols with valid symbols
         
         # Notify user of the updated symbols list
@@ -134,10 +128,9 @@ async def set_trading_pairs(update: Update, context: CallbackContext):
 
 # Function to check trading pairs and send alerts if conditions are met
 async def check_trading_pairs():
+    global selected_symbols
+    symbols_to_remove = []
     for symbol in selected_symbols:
-        if alerted_symbols.get(symbol):
-            continue  # Skip symbols that have already been alerted
-
         try:
             historical_data = get_historical_data(symbol, interval='1m')  # Changed to 1-minute interval
             cross_over, cross_under = check_vwma_cross(historical_data)
@@ -154,11 +147,19 @@ async def check_trading_pairs():
                 image_buffer = plot_vwma_chart(historical_data, symbol, title)
                 await send_telegram_message(symbol, message, image_buffer)
 
-                # Mark this symbol as alerted
-                alerted_symbols[symbol] = True
+                # Add this symbol to the removal list
+                symbols_to_remove.append(symbol)
 
         except Exception as e:
             print(f"Error processing {symbol}: {e}")
+    
+    # Remove alerted symbols from the selected_symbols list
+    selected_symbols = [symbol for symbol in selected_symbols if symbol not in symbols_to_remove]
+
+    # Notify user of the updated symbols list after removals
+    if symbols_to_remove:
+        updated_symbols_message = f'Trading pairs after alerts: {", ".join(selected_symbols)}'
+        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=updated_symbols_message)
 
 # Initialize Telegram Bot
 telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
