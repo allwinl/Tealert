@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+import ta  # Import the ta library for technical analysis
 import config  # Import the config module
 
 # Initialize Binance client
@@ -32,13 +33,9 @@ def get_historical_data(symbol, interval, limit=100):
 def calculate_vwma(df, period):
     return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
 
-# Function to calculate RSI
+# Function to calculate RSI using the ta library
 def calculate_rsi(df, period):
-    delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
 
 # Function to check VWMA cross
 def check_vwma_cross(df, short_period=3, long_period=7):
@@ -132,7 +129,7 @@ async def check_trading_pairs():
     symbols_to_remove = []
     for symbol in selected_symbols:
         try:
-            historical_data = get_historical_data(symbol, interval='4h')  # Changed to 1-minute interval
+            historical_data = get_historical_data(symbol, interval='4h')  # Changed to 4-hour interval
             cross_over, cross_under = check_vwma_cross(historical_data)
 
             if cross_over or cross_under:
@@ -158,7 +155,7 @@ async def check_trading_pairs():
 
     # Notify user of the updated symbols list after removals
     if symbols_to_remove:
-        updated_symbols_message = f'Trading pairs after alerts: {", ".join(selected_symbols)}'
+        updated_symbols_message = f'Updated Symbols after alerts: {", ".join(selected_symbols)}'
         await telegram_bot.send_message(chat_id=config.CHAT_ID, text=updated_symbols_message)
 
 # Initialize Telegram Bot
