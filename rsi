@@ -8,7 +8,7 @@ from telegram import Bot
 import config  # Import the config module
 import ta  # Import ta library
 
-interval = '1d'  # 1-day candlesticks
+interval = '4h'  # 1-day candlesticks
 
 # Initialize Binance client
 binance = ccxt.binance({
