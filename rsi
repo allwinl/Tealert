@@ -6,6 +6,7 @@ import asyncio
 import nest_asyncio
 from telegram import Bot
 import config  # Import the config module
+import ta  # Import ta library
 
 interval = '1d'  # 1-day candlesticks
 
@@ -30,13 +31,9 @@ def get_historical_data(symbol, interval, limit=100):
 def calculate_vwma(df, period):
     return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
 
-# Function to calculate RSI
+# Function to calculate RSI using ta library
 def calculate_rsi(df, period):
-    delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
 
 # Function to check VWMA cross
 def check_vwma_cross(df, short_period=3, long_period=7):
