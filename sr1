@@ -5,7 +5,7 @@ from io import BytesIO
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import ta  # Import the ta library for technical analysis
-import config1  # Import the config module
+import config  # Import the config module
 
 # Initialize Binance client
 binance = ccxt.binance({
