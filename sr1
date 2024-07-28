@@ -1,0 +1,192 @@
+import ccxt
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+from telegram import Bot, Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+import ta  # Import the ta library for technical analysis
+import config1  # Import the config module
+
+# Initialize Binance client
+binance = ccxt.binance({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# List to store selected symbols
+selected_symbols = []
+
+# Get the list of all trading pairs available on Binance
+def get_binance_symbols():
+    markets = binance.load_markets()
+    return list(markets.keys())
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=100):
+    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate VWMA
+def calculate_vwma(df, period):
+    return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+
+# Function to calculate RSI using the ta library
+def calculate_rsi(df, period):
+    return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
+
+# Function to calculate Stochastic RSI using the ta library
+def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
+    stoch_rsi = ta.momentum.StochRSIIndicator(df['close'], window=period, smooth1=smooth1, smooth2=smooth2)
+    df['stoch_rsi_k'] = stoch_rsi.stochrsi_k() * 100  # Multiply by 100 to scale
+    df['stoch_rsi_d'] = stoch_rsi.stochrsi_d() * 100  # Multiply by 100 to scale
+    print(df[['stoch_rsi_k', 'stoch_rsi_d']].tail(10))  # Print the last 10 values for debugging
+
+# Function to check VWMA cross
+def check_vwma_cross(df, short_period=3, long_period=7):
+    df['vwma_short'] = calculate_vwma(df, short_period)
+    df['vwma_long'] = calculate_vwma(df, long_period)
+
+    cross_over = df['vwma_short'].iloc[-2] > df['vwma_long'].iloc[-2] and df['vwma_short'].iloc[-3] <= df['vwma_long'].iloc[-3]
+    cross_under = df['vwma_short'].iloc[-2] < df['vwma_long'].iloc[-2] and df['vwma_short'].iloc[-3] >= df['vwma_long'].iloc[-3]
+
+    return cross_over, cross_under
+
+# Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
+def plot_vwma_chart(df, symbol, title):
+    # Calculate RSI and its moving average
+    df['rsi'] = calculate_rsi(df, period=14)
+    df['rsi_ma'] = df['rsi'].rolling(window=9).mean()
+    
+    # Calculate Stochastic RSI
+    calculate_stoch_rsi(df)
+
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
+
+    # Plotting the VWMA and price chart
+    ax1.plot(df.index, df['close'], label='Close Price', color='black')
+    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
+    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Price')
+    ax1.set_title(title)
+    ax1.legend()
+
+    # Plotting the RSI and its moving average
+    ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
+    ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('RSI')
+    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.legend()
+
+    # Plotting the Stochastic RSI
+    ax3.plot(df.index, df['stoch_rsi_k'], label='%K', color='green')
+    ax3.plot(df.index, df['stoch_rsi_d'], label='%D', linestyle='--', color='red')
+    ax3.set_xlabel('Timestamp')
+    ax3.set_ylabel('Stochastic RSI')
+    ax3.axhline(20, linestyle='--', color='red')  # Oversold line
+    ax3.axhline(80, linestyle='--', color='green')  # Overbought line
+    ax3.set_ylim(0, 100)  # Ensure the plot scales from 0 to 100
+    ax3.legend()
+
+    plt.tight_layout()
+
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+    return buf
+
+# Function to send Telegram message and image
+async def send_telegram_message(symbol, message, image_buffer=None):
+    await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+    if image_buffer:
+        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+
+# Handler for the /start command
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text('Send me the trading pairs you want to monitor, separated by commas. For example: BTC/USDT, ETH/USDT')
+
+# Handler for receiving trading pairs
+async def set_trading_pairs(update: Update, context: CallbackContext):
+    global selected_symbols
+    pairs = update.message.text.split(',')
+    binance_symbols = get_binance_symbols()
+
+    # Convert pairs to uppercase and strip whitespace
+    new_symbols = [pair.strip().upper() for pair in pairs]
+
+    # Update selected symbols to include both new and existing symbols
+    selected_symbols_set = set(selected_symbols)  # Use a set to manage symbols
+    new_symbols_set = set(new_symbols)
+    selected_symbols_set.update(new_symbols_set)
+
+    # Check if symbols are available on Binance
+    invalid_symbols = [symbol for symbol in selected_symbols_set if symbol not in binance_symbols]
+    valid_symbols = [symbol for symbol in selected_symbols_set if symbol in binance_symbols]
+
+    if invalid_symbols:
+        await update.message.reply_text(f'The following symbols are not available on Binance: {", ".join(invalid_symbols)}')
+
+    if valid_symbols:
+        selected_symbols[:] = valid_symbols  # Update selected_symbols with valid symbols
+        
+        # Notify user of the updated symbols list
+        updated_symbols_message = f'Trading pairs updated to: {", ".join(valid_symbols)}'
+        await update.message.reply_text(updated_symbols_message)
+
+        # Check the trading pairs
+        await check_trading_pairs()
+
+# Function to check trading pairs and send alerts if conditions are met
+async def check_trading_pairs():
+    global selected_symbols
+    symbols_to_remove = []
+    for symbol in selected_symbols:
+        try:
+            historical_data = get_historical_data(symbol, interval='2h')  # Changed to 4-hour interval
+            cross_over, cross_under = check_vwma_cross(historical_data)
+
+            if cross_over or cross_under:
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    title = f'Cross Over for {symbol}'
+                else:
+                    message = f'Cross under detected on #{symbol}'
+                    title = f'Cross Under for {symbol}'
+                
+                # Plot and get image buffer
+                image_buffer = plot_vwma_chart(historical_data, symbol, title)
+                await send_telegram_message(symbol, message, image_buffer)
+
+                # Add this symbol to the removal list
+                symbols_to_remove.append(symbol)
+
+        except Exception as e:
+            print(f"Error processing {symbol}: {e}")
+    
+    # Remove alerted symbols from the selected_symbols list
+    selected_symbols = [symbol for symbol in selected_symbols if symbol not in symbols_to_remove]
+
+    # Notify user of the updated symbols list after removals
+    if symbols_to_remove:
+        updated_symbols_message = f'Updated Symbols after alerts: {", ".join(selected_symbols)}'
+        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=updated_symbols_message)
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
+
+# Initialize Application for handling Telegram updates
+application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+
+# Add handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_trading_pairs))
+
+# Start the Telegram bot
+application.run_polling()
