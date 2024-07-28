@@ -40,6 +40,7 @@ def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
     stoch_rsi = ta.momentum.StochRSIIndicator(df['close'], window=period, smooth1=smooth1, smooth2=smooth2)
     df['stoch_rsi_k'] = stoch_rsi.stochrsi_k()
     df['stoch_rsi_d'] = stoch_rsi.stochrsi_d()
+    print(df[['stoch_rsi_k', 'stoch_rsi_d']].tail(10))  # Print the last 10 values for debugging
 
 # Function to check VWMA cross
 def check_vwma_cross(df, short_period=3, long_period=7):
