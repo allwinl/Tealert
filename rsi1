@@ -38,8 +38,8 @@ def calculate_rsi(df, period):
 # Function to calculate Stochastic RSI using ta library
 def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
     stoch_rsi = ta.momentum.StochRSIIndicator(df['close'], window=period, smooth1=smooth1, smooth2=smooth2)
-    df['stoch_rsi_k'] = stoch_rsi.stochrsi_k()
-    df['stoch_rsi_d'] = stoch_rsi.stochrsi_d()
+    df['stoch_rsi_k'] = stoch_rsi.stochrsi_k() * 100  # Multiply by 100 to scale
+    df['stoch_rsi_d'] = stoch_rsi.stochrsi_d() * 100  # Multiply by 100 to scale
     print(df[['stoch_rsi_k', 'stoch_rsi_d']].tail(10))  # Print the last 10 values for debugging
 
 # Function to check VWMA cross
