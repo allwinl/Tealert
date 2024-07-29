@@ -43,7 +43,7 @@ def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
     #print(df[['stoch_rsi_k', 'stoch_rsi_d']].tail(10))  # Print the last 10 values for debugging
 
 # Function to check VWMA cross
-def check_vwma_cross(df, short_period=3, long_period=7):
+def check_vwma_cross(df, short_period=1, long_period=3):
     df['vwma_short'] = calculate_vwma(df, short_period)
     df['vwma_long'] = calculate_vwma(df, long_period)
 
