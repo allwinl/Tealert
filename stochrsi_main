@@ -1,4 +1,3 @@
-
 import ccxt
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -51,6 +50,10 @@ def check_stoch_rsi_cross(df):
 
 # Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
 def plot_vwma_chart(df, symbol, title):
+    # Calculate VWMA
+    df['vwma_short'] = calculate_vwma(df, period=3)
+    df['vwma_long'] = calculate_vwma(df, period=7)
+    
     # Calculate RSI and its moving average
     df['rsi'] = calculate_rsi(df, period=14)
     df['rsi_ma'] = df['rsi'].rolling(window=9).mean()
