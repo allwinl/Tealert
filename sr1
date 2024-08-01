@@ -149,16 +149,16 @@ async def check_trading_pairs():
     symbols_to_remove = []
     for symbol in selected_symbols:
         try:
-            historical_data = get_historical_data(symbol, interval='1h')  # Changed to 4-hour interval
+            historical_data = get_historical_data(symbol, interval='8h')  # Changed to 4-hour interval
             cross_over, cross_under = check_vwma_cross(historical_data)
 
             if cross_over or cross_under:
                 if cross_over:
                     message = f'Cross over detected on #{symbol}'
-                    title = f'Cross Over for {symbol}'
+                    title = f'#Cross_Over for #{symbol}'
                 else:
                     message = f'Cross under detected on #{symbol}'
-                    title = f'Cross Under for {symbol}'
+                    title = f'#Cross_Under for #{symbol}'
                 
                 # Plot and get image buffer
                 image_buffer = plot_vwma_chart(historical_data, symbol, title)
