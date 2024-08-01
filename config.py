@@ -4,7 +4,7 @@ API_KEY = ''
 API_SECRET = ''
 
 # Telegram bot credentials
-TELEGRAM_TOKEN = ''
+TELEGRAM_TOKEN = '7413769690:AAFNIFhwa6qb7LIu0ciApOtYJPfI3cXWcE0'
 CHAT_ID = ''
 
 # Trading symbols
