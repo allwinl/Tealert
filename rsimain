@@ -44,8 +44,8 @@ def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
 # Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
 def plot_vwma_chart(df, symbol, title):
     # Calculate VWMA
-    df['vwma_short'] = calculate_vwma(df, period=3)
-    df['vwma_long'] = calculate_vwma(df, period=7)
+    df['vwma_short'] = calculate_vwma(df, period=1)
+    df['vwma_long'] = calculate_vwma(df, period=3)
     
     # Calculate RSI and its moving average
     df['rsi'] = calculate_rsi(df, period=14)
@@ -70,8 +70,8 @@ def plot_vwma_chart(df, symbol, title):
     ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
     ax2.set_xlabel('Timestamp')
     ax2.set_ylabel('RSI')
-    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
-    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.axhline(40, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(60, linestyle='--', color='green')  # Overbought line
     ax2.legend()
 
     # Plotting the Stochastic RSI
