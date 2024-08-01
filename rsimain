@@ -1,0 +1,145 @@
+import ccxt
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+import asyncio
+import nest_asyncio
+from telegram import Bot
+import config  # Import the config module
+import ta  # Import ta library
+
+interval = '8h'  # 8-hour candlesticks
+
+# Initialize Binance client
+binance = ccxt.binance({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=100):
+    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate VWMA
+def calculate_vwma(df, period):
+    return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+
+# Function to calculate RSI using ta library
+def calculate_rsi(df, period):
+    return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
+
+# Function to calculate Stochastic RSI using ta library
+def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
+    stoch_rsi = ta.momentum.StochRSIIndicator(df['close'], window=period, smooth1=smooth1, smooth2=smooth2)
+    df['stoch_rsi_k'] = stoch_rsi.stochrsi_k() * 100  # Multiply by 100 to scale
+    df['stoch_rsi_d'] = stoch_rsi.stochrsi_d() * 100  # Multiply by 100 to scale
+
+# Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
+def plot_vwma_chart(df, symbol, title):
+    # Calculate VWMA
+    df['vwma_short'] = calculate_vwma(df, period=3)
+    df['vwma_long'] = calculate_vwma(df, period=7)
+    
+    # Calculate RSI and its moving average
+    df['rsi'] = calculate_rsi(df, period=14)
+    df['rsi_ma'] = df['rsi'].rolling(window=9).mean()
+    
+    # Calculate Stochastic RSI
+    calculate_stoch_rsi(df)
+
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
+
+    # Plotting the VWMA and price chart
+    ax1.plot(df.index, df['close'], label='Close Price', color='black')
+    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
+    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Price')
+    ax1.set_title(title)
+    ax1.legend()
+
+    # Plotting the RSI and its moving average
+    ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
+    ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('RSI')
+    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.legend()
+
+    # Plotting the Stochastic RSI
+    ax3.plot(df.index, df['stoch_rsi_k'], label='%K', color='green')
+    ax3.plot(df.index, df['stoch_rsi_d'], label='%D', linestyle='--', color='red')
+    ax3.set_xlabel('Timestamp')
+    ax3.set_ylabel('Stochastic RSI')
+    ax3.axhline(20, linestyle='--', color='red')  # Oversold line
+    ax3.axhline(80, linestyle='--', color='green')  # Overbought line
+    ax3.set_ylim(0, 100)  # Ensure the plot scales from 0 to 100
+    ax3.legend()
+
+    plt.tight_layout()
+
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+    return buf
+
+# Function to send Telegram message and image (now defined as async)
+async def send_telegram_message(symbol, message, image_buffer):
+    # Check if the current message is the same as the previous one for this symbol
+    if last_alert_messages.get(symbol) != message:
+        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+        # Send image
+        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+        # Update the last alert message for this symbol
+        last_alert_messages[symbol] = message
+
+# Main function (now defined as async)
+async def main():
+    while True:
+        for symbol in config.SELECTED_SYMBOLS:
+            try:
+                historical_data = get_historical_data(symbol, interval)
+                
+                # Calculate RSI
+                historical_data['rsi'] = calculate_rsi(historical_data, period=14)
+                
+                # Check for RSI cross over and cross under
+                rsi_cross_over = historical_data['rsi'].iloc[-2] > 60 and historical_data['rsi'].iloc[-3] <= 60
+                rsi_cross_under = historical_data['rsi'].iloc[-2] < 40 and historical_data['rsi'].iloc[-3] >= 40
+
+                # Generate alert messages and send them
+                if rsi_cross_over:
+                    message = f'#RSI_Overbought detected on #{symbol}'
+                    title = f'RSI Overbought for {symbol}'
+                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+                elif rsi_cross_under:
+                    message = f'#RSI_Oversold detected on #{symbol}'
+                    title = f'RSI Oversold for {symbol}'
+                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Sleep for a specified interval before checking again
+        await asyncio.sleep(300)  # Adjust the sleep duration as needed
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
+
+# Use nest_asyncio to allow running asyncio in Jupyter notebooks
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
