@@ -1,7 +1,7 @@
 
 # Binance API credentials
-API_KEY = ''
-API_SECRET = ''
+API_KEY = 'aSPkiWrlnLzest6sUOmxz8tIY06v7MzAmdkUxRFupomyj3400MABC0k0wr5erTCE'
+API_SECRET = 'JZGHUi2b8B1pQBD2zf1kKnJr7h18P8vghVN3JrVvgP5WD9WnvylW3HETXGERMJo3'
 
 # Telegram bot credentials
 TELEGRAM_TOKEN = '7413769690:AAFNIFhwa6qb7LIu0ciApOtYJPfI3cXWcE0'
