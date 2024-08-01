@@ -5,7 +5,7 @@ API_SECRET = ''
 
 # Telegram bot credentials
 TELEGRAM_TOKEN = '7413769690:AAFNIFhwa6qb7LIu0ciApOtYJPfI3cXWcE0'
-CHAT_ID = ''
+CHAT_ID = '1385370555'
 
 # Trading symbols
 SELECTED_SYMBOLS = [
