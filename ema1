@@ -1,0 +1,171 @@
+import ccxt
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+from telegram import Bot, Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+import ta  # Import the ta library for technical analysis
+import config  # Import the config module
+
+# Initialize Binance client
+binance = ccxt.binance({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# List to store selected symbols
+selected_symbols = []
+
+# Get the list of all trading pairs available on Binance
+def get_binance_symbols():
+    markets = binance.load_markets()
+    return list(markets.keys())
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=100):
+    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate EMA
+def calculate_ema(df, period):
+    return ta.trend.EMAIndicator(df['close'], window=period).ema_indicator()
+
+# Function to calculate RSI using the ta library
+def calculate_rsi(df, period):
+    return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
+
+# Function to check EMA cross
+def check_ema_cross(df, short_period=3, long_period=7):
+    df['ema_short'] = calculate_ema(df, short_period)
+    df['ema_long'] = calculate_ema(df, long_period)
+
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
+
+    return cross_over, cross_under
+
+# Function to plot EMA chart, two RSI indicators, and RSI's MA, then return image buffer
+def plot_ema_chart(df, symbol, title):
+    # Calculate RSI (default 14-period) and another RSI (7-period)
+    df['rsi_14'] = calculate_rsi(df, period=6)
+    df['rsi_7'] = calculate_rsi(df, period=21)
+    df['rsi_14_ma'] = df['rsi_14'].rolling(window=9).mean()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1]})
+
+    # Plotting the EMA and price chart
+    ax1.plot(df.index, df['close'], label='Close Price', color='black')
+    ax1.plot(df.index, df['ema_short'], label='Short-term EMA', linestyle='--', color='red')
+    ax1.plot(df.index, df['ema_long'], label='Long-term EMA', linestyle='--', color='purple')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Price')
+    ax1.set_title(title)
+    ax1.legend()
+
+    # Plotting the two RSI indicators and the RSI moving average
+    ax2.plot(df.index, df['rsi_14'], label='RSI (14)', color='blue')
+    ax2.plot(df.index, df['rsi_14_ma'], label='RSI MA (14)', linestyle='--', color='orange')
+    ax2.plot(df.index, df['rsi_7'], label='RSI (7)', color='green')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('RSI')
+    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.legend()
+
+    plt.tight_layout()
+
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+    return buf
+
+# Function to send Telegram message and image
+async def send_telegram_message(symbol, message, image_buffer=None):
+    await application.bot.send_message(chat_id=config.CHAT_ID, text=message)
+    if image_buffer:
+        await application.bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+
+# Handler for the /start command
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text('Send me the trading pairs you want to monitor, separated by commas. For example: BTC/USDT, ETH/USDT')
+
+# Handler for receiving trading pairs
+async def set_trading_pairs(update: Update, context: CallbackContext):
+    global selected_symbols
+    pairs = update.message.text.split(',')
+    binance_symbols = get_binance_symbols()
+
+    # Convert pairs to uppercase and strip whitespace
+    new_symbols = [pair.strip().upper() for pair in pairs]
+
+    # Update selected symbols to include both new and existing symbols
+    selected_symbols_set = set(selected_symbols)  # Use a set to manage symbols
+    new_symbols_set = set(new_symbols)
+    selected_symbols_set.update(new_symbols_set)
+
+    # Check if symbols are available on Binance
+    invalid_symbols = [symbol for symbol in selected_symbols_set if symbol not in binance_symbols]
+    valid_symbols = [symbol for symbol in selected_symbols_set if symbol in binance_symbols]
+
+    if invalid_symbols:
+        await update.message.reply_text(f'The following symbols are not available on Binance: {", ".join(invalid_symbols)}')
+
+    if valid_symbols:
+        selected_symbols[:] = valid_symbols  # Update selected_symbols with valid symbols
+        
+        # Notify user of the updated symbols list
+        updated_symbols_message = f'Trading pairs updated to: {", ".join(valid_symbols)}'
+        await update.message.reply_text(updated_symbols_message)
+
+        # Check the trading pairs
+        await check_trading_pairs()
+
+# Function to check trading pairs and send alerts if conditions are met
+async def check_trading_pairs():
+    global selected_symbols
+    symbols_to_remove = []
+    for symbol in selected_symbols:
+        try:
+            historical_data = get_historical_data(symbol, interval='4h')  # Changed to 4-hour interval
+            cross_over, cross_under = check_ema_cross(historical_data)
+
+            if cross_over or cross_under:
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    title = f'Cross Over for {symbol}'
+                else:
+                    message = f'Cross under detected on #{symbol}'
+                    title = f'Cross Under for {symbol}'
+                
+                # Plot and get image buffer
+                image_buffer = plot_ema_chart(historical_data, symbol, title)
+                await send_telegram_message(symbol, message, image_buffer)
+
+                # Add this symbol to the removal list
+                symbols_to_remove.append(symbol)
+
+        except Exception as e:
+            print(f"Error processing {symbol}: {e}")
+    
+    # Remove alerted symbols from the selected_symbols list
+    selected_symbols = [symbol for symbol in selected_symbols if symbol not in symbols_to_remove]
+
+    # Notify user of the updated symbols list after removals
+    if symbols_to_remove:
+        updated_symbols_message = f'Updated Symbols after alerts: {", ".join(selected_symbols)}'
+        await application.bot.send_message(chat_id=config.CHAT_ID, text=updated_symbols_message)
+
+# Initialize Application for handling Telegram updates
+application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+
+# Add handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_trading_pairs))
+
+# Start the Telegram bot
+application.run_polling()
