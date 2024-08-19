@@ -52,10 +52,10 @@ def check_stoch_rsi_cross(df):
 # Function to plot candlestick chart, VWMA, RSI, and Stochastic RSI, then return image buffer
 def plot_vwma_chart(df, symbol, title):
     # Fill NaN values or drop them
-    df = df.fillna(method='ffill').dropna()
+    df = df.ffill().dropna()
 
     # Check if the data is valid
-    if df is None or df.empty:
+    if df.empty:
         print(f"No data available for {symbol}. Skipping plot.")
         return None
 
@@ -111,8 +111,9 @@ async def send_telegram_message(symbol, message, image_buffer):
     # Check if the current message is the same as the previous one for this symbol
     if last_alert_messages.get(symbol) != message:
         await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-        # Send image
-        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+        # Send image if buffer is valid
+        if image_buffer:
+            await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
         # Update the last alert message for this symbol
         last_alert_messages[symbol] = message
 
