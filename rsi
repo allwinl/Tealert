@@ -1,3 +1,5 @@
+
+
 import ccxt
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -37,7 +39,7 @@ def calculate_rsi(df, period=6):
 
 # Function to calculate Stochastic RSI
 def calculate_stochrsi(df, period=14, smooth_k=3, smooth_d=3):
-    stoch_rsi = ta.momentum.StochasticOscillator(df['high'], df['low'], df['close'], window=period)
+    stoch_rsi = ta.momentum.StochasticOscillator(df['close'], window=period)
     df['stochrsi'] = stoch_rsi.stoch()
     df['stochrsi_k'] = df['stochrsi'].rolling(window=smooth_k).mean()
     df['stochrsi_d'] = df['stochrsi_k'].rolling(window=smooth_d).mean()
@@ -67,8 +69,8 @@ def check_vwma_cross(df, short_period=5, long_period=10):
 # Function to plot VWMA, RSI, and Stochastic RSI chart and return image buffer
 def plot_chart(df, symbol, title):
     # Calculate RSI
-    df['rsi_14'] = calculate_rsi(df, period=14)
-    df['rsi_200'] = calculate_rsi(df, period=200)
+    df['rsi_14'] = calculate_rsi(df, period=6)
+    df['rsi_200'] = calculate_rsi(df, period=21)
 
     # Calculate Stochastic RSI
     df = calculate_stochrsi(df, period=14)
@@ -85,8 +87,8 @@ def plot_chart(df, symbol, title):
     ax1.legend()
 
     # Plotting the RSI
-    ax2.plot(df.index, df['rsi_14'], label='RSI (14)', color='blue')
-    ax2.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
+    ax2.plot(df.index, df['rsi_14'], label='RSI (6)', color='blue')
+    ax2.plot(df.index, df['rsi_200'], label='RSI (21)', color='green')
     ax2.set_xlabel('Timestamp')
     ax2.set_ylabel('RSI')
     ax2.axhline(30, linestyle='-', color='red')  # Oversold line
@@ -136,16 +138,16 @@ async def main():
 
                 # Create messages based on crosses
                 if rsi_cross_over:
-                    message = f'RSI 14 crossed above RSI 200 on #{symbol}'
+                    message = f'RSI 6 #crossed_above RSI 21 on #{symbol}'
                     title = f'RSI Cross Over for {symbol}'
                 elif rsi_cross_under:
-                    message = f'RSI 14 crossed below RSI 200 on #{symbol}'
+                    message = f'RSI 6 #crossed_below RSI 21 on #{symbol}'
                     title = f'RSI Cross Under for {symbol}'
                 elif vwma_cross_over:
-                    message = f'VWMA cross over detected on #{symbol}'
+                    message = f'VWMA #cross_over detected on #{symbol}'
                     title = f'VWMA Cross Over for {symbol}'
                 elif vwma_cross_under:
-                    message = f'VWMA cross under detected on #{symbol}'
+                    message = f'VWMA #cross_under detected on #{symbol}'
                     title = f'VWMA Cross Under for {symbol}'
                 else:
                     message = None
