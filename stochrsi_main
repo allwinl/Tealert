@@ -7,9 +7,8 @@ import nest_asyncio
 from telegram import Bot
 import config  # Import the config module
 import ta  # Import ta library
-import mplfinance as mpf  # Import mplfinance for candlestick charts
 
-interval = '8h'  # 8-hour candlesticks
+interval = '1d'  # 8-hour candlesticks
 
 # Initialize Binance client
 binance = ccxt.binance({
@@ -49,16 +48,8 @@ def check_stoch_rsi_cross(df):
     cross_under = df['stoch_rsi_k'].iloc[-2] < df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] >= df['stoch_rsi_d'].iloc[-3]
     return cross_over, cross_under
 
-# Function to plot candlestick chart, VWMA, RSI, and Stochastic RSI, then return image buffer
+# Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
 def plot_vwma_chart(df, symbol, title):
-    # Fill NaN values or drop them
-    df = df.ffill().dropna()
-
-    # Check if the data is valid
-    if df.empty:
-        print(f"No data available for {symbol}. Skipping plot.")
-        return None
-
     # Calculate VWMA
     df['vwma_short'] = calculate_vwma(df, period=3)
     df['vwma_long'] = calculate_vwma(df, period=7)
@@ -70,48 +61,43 @@ def plot_vwma_chart(df, symbol, title):
     # Calculate Stochastic RSI
     calculate_stoch_rsi(df)
 
-    try:
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
 
-        # Plotting the candlestick chart and VWMA
-        mpf.plot(df, type='candle', ax=ax1, style='charles', ylabel='Price')
-        ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
-        ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
-        ax1.legend()
+    # Plotting the VWMA and price chart
+    ax1.plot(df.index, df['close'], label='Close Price', color='black')
+    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
+    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Price')
+    ax1.set_title(title)
+    ax1.legend()
 
-        # Plotting the RSI and its moving average
-        ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
-        ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
-        ax2.set_xlabel('Timestamp')
-        ax2.set_ylabel('RSI')
-        ax2.axhline(30, linestyle='--', color='red')  # Oversold line
-        ax2.axhline(70, linestyle='--', color='green')  # Overbought line
-        ax2.legend()
+    # Plotting the RSI and its moving average
+    ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
+    ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('RSI')
+    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.legend()
 
-        # Plotting the Stochastic RSI
-        ax3.plot(df.index, df['stoch_rsi_k'], label='%K', color='green')
-        ax3.plot(df.index, df['stoch_rsi_d'], label='%D', linestyle='--', color='red')
-        ax3.set_xlabel('Timestamp')
-        ax3.set_ylabel('Stochastic RSI')
-        ax3.axhline(20, linestyle='--', color='red')  # Oversold line
-        ax3.axhline(80, linestyle='--', color='green')  # Overbought line
-        ax3.set_ylim(0, 100)  # Ensure the plot scales from 0 to 100
-        ax3.legend()
+    # Plotting the Stochastic RSI
+    ax3.plot(df.index, df['stoch_rsi_k'], label='%K', color='green')
+    ax3.plot(df.index, df['stoch_rsi_d'], label='%D', linestyle='--', color='red')
+    ax3.set_xlabel('Timestamp')
+    ax3.set_ylabel('Stochastic RSI')
+    ax3.axhline(20, linestyle='--', color='red')  # Oversold line
+    ax3.axhline(80, linestyle='--', color='green')  # Overbought line
+    ax3.set_ylim(0, 100)  # Ensure the plot scales from 0 to 100
+    ax3.legend()
 
-        plt.suptitle(title)
-        plt.tight_layout()
+    plt.tight_layout()
 
-        # Save plot to a BytesIO object
-        buf = BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-    except Exception as e:
-        print(f"Error while plotting {symbol}: {e}")
-        return None
-    finally:
-        # Ensure the figure is closed to avoid memory leaks
-        plt.close(fig)
-
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
     return buf
 
 # Function to send Telegram message and image (now defined as async)
@@ -119,9 +105,8 @@ async def send_telegram_message(symbol, message, image_buffer):
     # Check if the current message is the same as the previous one for this symbol
     if last_alert_messages.get(symbol) != message:
         await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-        # Send image if buffer is valid
-        if image_buffer:
-            await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+        # Send image
+        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
         # Update the last alert message for this symbol
         last_alert_messages[symbol] = message
 
@@ -138,15 +123,13 @@ async def main():
                     title = f'Cross Over for {symbol}'
                     # Plot and get image buffer
                     image_buffer = plot_vwma_chart(historical_data, symbol, title)
-                    if image_buffer:
-                        await send_telegram_message(symbol, message, image_buffer)
+                    await send_telegram_message(symbol, message, image_buffer)
                 elif cross_under:
                     message = f'#Cross_under detected on #{symbol}'
                     title = f'Cross Under for {symbol}'
                     # Plot and get image buffer
                     image_buffer = plot_vwma_chart(historical_data, symbol, title)
-                    if image_buffer:
-                        await send_telegram_message(symbol, message, image_buffer)
+                    await send_telegram_message(symbol, message, image_buffer)
 
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
