@@ -32,7 +32,7 @@ def calculate_vwma(df, period):
     return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
 
 # Function to calculate RSI using ta library
-def calculate_rsi(df, period):
+def calculate_rsi(df, period=14):
     return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
 
 # Function to check VWMA cross
@@ -45,11 +45,11 @@ def check_vwma_cross(df, short_period=3, long_period=7):
 
     return cross_over, cross_under
 
-# Function to plot VWMA chart, RSI and RSI's MA, then return image buffer
+# Function to plot VWMA chart and RSI, then return image buffer
 def plot_vwma_chart(df, symbol, title):
-    # Calculate RSI and its moving average
+    # Calculate RSI
     df['rsi'] = calculate_rsi(df, period=14)
-    df['rsi_ma'] = df['rsi'].rolling(window=9).mean()
+    df['rsi_200'] = calculate_rsi(df, period=200)
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1]})
 
@@ -62,9 +62,9 @@ def plot_vwma_chart(df, symbol, title):
     ax1.set_title(title)
     ax1.legend()
 
-    # Plotting the RSI and its moving average
-    ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
-    ax2.plot(df.index, df['rsi_ma'], label='RSI MA', linestyle='--', color='orange')
+    # Plotting the RSI
+    ax2.plot(df.index, df['rsi'], label='RSI (14)', color='blue')
+    ax2.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
     ax2.set_xlabel('Timestamp')
     ax2.set_ylabel('RSI')
     ax2.axhline(30, linestyle='--', color='red')  # Oversold line
