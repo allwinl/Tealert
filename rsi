@@ -27,13 +27,25 @@ def get_historical_data(symbol, interval, limit=300):
     df.set_index('timestamp', inplace=True)
     return df
 
+# Function to calculate VWMA
+def calculate_vwma(df, period):
+    return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+
 # Function to calculate RSI using ta library
 def calculate_rsi(df, period=14):
     return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
 
+# Function to calculate Stochastic RSI
+def calculate_stochrsi(df, period=14, smooth_k=3, smooth_d=3):
+    stoch_rsi = ta.momentum.StochasticOscillator(df['close'], window=period)
+    df['stochrsi'] = stoch_rsi.stoch()
+    df['stochrsi_k'] = df['stochrsi'].rolling(window=smooth_k).mean()
+    df['stochrsi_d'] = df['stochrsi_k'].rolling(window=smooth_d).mean()
+    return df
+
 # Function to check RSI cross
 def check_rsi_cross(df):
-    df['rsi_14'] = calculate_rsi(df, period=14)
+    df['rsi_14'] = calculate_rsi(df, period=20)
     df['rsi_200'] = calculate_rsi(df, period=200)
 
     # Detect cross over and cross under
@@ -42,23 +54,47 @@ def check_rsi_cross(df):
 
     return cross_over, cross_under
 
-# Function to plot RSI chart and return image buffer
-def plot_rsi_chart(df, symbol, title):
+# Function to plot VWMA, RSI, and Stochastic RSI chart and return image buffer
+def plot_chart(df, symbol, title):
     # Calculate RSI
     df['rsi_14'] = calculate_rsi(df, period=20)
     df['rsi_200'] = calculate_rsi(df, period=200)
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # Calculate Stochastic RSI
+    df = calculate_stochrsi(df, period=14)
+
+    # Calculate VWMA
+    df['vwma_short'] = calculate_vwma(df, period=5)
+    df['vwma_long'] = calculate_vwma(df, period=10)
+
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), gridspec_kw={'height_ratios': [3, 1, 1]})
+
+    # Plotting the VWMA and price chart
+    ax1.plot(df.index, df['close'], label='Close Price', color='black')
+    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
+    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
+    ax1.set_xlabel('Timestamp')
+    ax1.set_ylabel('Price')
+    ax1.set_title(title)
+    ax1.legend()
 
     # Plotting the RSI
-    ax.plot(df.index, df['rsi_14'], label='RSI (20)', color='blue')
-    ax.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
-    ax.set_xlabel('Timestamp')
-    ax.set_ylabel('RSI')
-    ax.axhline(30, linestyle='--', color='red')  # Oversold line
-    ax.axhline(70, linestyle='--', color='green')  # Overbought line
-    ax.set_title(title)
-    ax.legend()
+    ax2.plot(df.index, df['rsi_14'], label='RSI (20)', color='blue')
+    ax2.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('RSI')
+    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.legend()
+
+    # Plotting the Stochastic RSI
+    ax3.plot(df.index, df['stochrsi_k'], label='Stochastic RSI %K', color='blue')
+    ax3.plot(df.index, df['stochrsi_d'], label='Stochastic RSI %D', color='red')
+    ax3.set_xlabel('Timestamp')
+    ax3.set_ylabel('Stochastic RSI')
+    ax3.axhline(0.2, linestyle='--', color='green')  # Oversold line
+    ax3.axhline(0.8, linestyle='--', color='red')  # Overbought line
+    ax3.legend()
 
     plt.tight_layout()
 
@@ -85,19 +121,24 @@ async def main():
         for symbol in config.SELECTED_SYMBOLS:
             try:
                 historical_data = get_historical_data(symbol, interval)
-                cross_over, cross_under = check_rsi_cross(historical_data)
+                
+                # Calculate RSI crosses
+                rsi_cross_over, rsi_cross_under = check_rsi_cross(historical_data)
 
-                if cross_over:
-                    message = f'RSI 14 crossed above RSI 200 on #{symbol}'
+                # Create messages based on RSI crosses
+                if rsi_cross_over:
+                    message = f'RSI 20 #crossed_above RSI 200 on #{symbol}'
                     title = f'RSI Cross Over for {symbol}'
-                    # Plot and get image buffer
-                    image_buffer = plot_rsi_chart(historical_data, symbol, title)
-                    await send_telegram_message(symbol, message, image_buffer)
-                elif cross_under:
-                    message = f'RSI 14 crossed below RSI 200 on #{symbol}'
+                elif rsi_cross_under:
+                    message = f'RSI 20 #crossed_below RSI 200 on #{symbol}'
                     title = f'RSI Cross Under for {symbol}'
+                else:
+                    message = None
+                
+                # Plot and send alerts if there are messages
+                if message:
                     # Plot and get image buffer
-                    image_buffer = plot_rsi_chart(historical_data, symbol, title)
+                    image_buffer = plot_chart(historical_data, symbol, title)
                     await send_telegram_message(symbol, message, image_buffer)
 
             except Exception as e:
