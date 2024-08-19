@@ -1,3 +1,5 @@
+
+
 import ccxt
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,7 +22,7 @@ binance = ccxt.binance({
 last_alert_messages = {}
 
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=300):
+def get_historical_data(symbol, interval, limit=100):
     ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -32,12 +34,12 @@ def calculate_vwma(df, period):
     return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
 
 # Function to calculate RSI using ta library
-def calculate_rsi(df, period=14):
+def calculate_rsi(df, period=6):
     return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
 
 # Function to calculate Stochastic RSI
 def calculate_stochrsi(df, period=14, smooth_k=3, smooth_d=3):
-    stoch_rsi = ta.momentum.StochasticOscillator(df['high'], df['low'], df['close'], window=period)
+    stoch_rsi = ta.momentum.StochasticOscillator(df['close'], window=period)
     df['stochrsi'] = stoch_rsi.stoch()
     df['stochrsi_k'] = df['stochrsi'].rolling(window=smooth_k).mean()
     df['stochrsi_d'] = df['stochrsi_k'].rolling(window=smooth_d).mean()
@@ -45,8 +47,8 @@ def calculate_stochrsi(df, period=14, smooth_k=3, smooth_d=3):
 
 # Function to check RSI cross
 def check_rsi_cross(df):
-    df['rsi_14'] = calculate_rsi(df, period=20)
-    df['rsi_200'] = calculate_rsi(df, period=200)
+    df['rsi_14'] = calculate_rsi(df, period=6)
+    df['rsi_200'] = calculate_rsi(df, period=21)
 
     # Detect cross over and cross under
     cross_over = df['rsi_14'].iloc[-3] < df['rsi_200'].iloc[-3] and df['rsi_14'].iloc[-2] > df['rsi_200'].iloc[-2]
@@ -54,37 +56,43 @@ def check_rsi_cross(df):
 
     return cross_over, cross_under
 
+# Function to check VWMA cross
+def check_vwma_cross(df, short_period=5, long_period=10):
+    df['vwma_short'] = calculate_vwma(df, short_period)
+    df['vwma_long'] = calculate_vwma(df, long_period)
+
+    cross_over = df['vwma_short'].iloc[-2] > df['vwma_long'].iloc[-2] and df['vwma_short'].iloc[-3] < df['vwma_long'].iloc[-3]
+    cross_under = df['vwma_short'].iloc[-2] < df['vwma_long'].iloc[-2] and df['vwma_short'].iloc[-3] > df['vwma_long'].iloc[-3]
+
+    return cross_over, cross_under
+
 # Function to plot VWMA, RSI, and Stochastic RSI chart and return image buffer
 def plot_chart(df, symbol, title):
     # Calculate RSI
-    df['rsi_14'] = calculate_rsi(df, period=20)
+    df['rsi_14'] = calculate_rsi(df, period=14)
     df['rsi_200'] = calculate_rsi(df, period=200)
 
     # Calculate Stochastic RSI
     df = calculate_stochrsi(df, period=14)
 
-    # Calculate VWMA
-    df['vwma_short'] = calculate_vwma(df, period=5)
-    df['vwma_long'] = calculate_vwma(df, period=10)
-
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), gridspec_kw={'height_ratios': [3, 1, 1]})
 
     # Plotting the VWMA and price chart
     ax1.plot(df.index, df['close'], label='Close Price', color='black')
-    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
-    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
+    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='-', color='red')
+    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='-', color='purple')
     ax1.set_xlabel('Timestamp')
     ax1.set_ylabel('Price')
     ax1.set_title(title)
     ax1.legend()
 
     # Plotting the RSI
-    ax2.plot(df.index, df['rsi_14'], label='RSI (20)', color='blue')
+    ax2.plot(df.index, df['rsi_14'], label='RSI (14)', color='blue')
     ax2.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
     ax2.set_xlabel('Timestamp')
     ax2.set_ylabel('RSI')
-    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
-    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax2.axhline(30, linestyle='-', color='red')  # Oversold line
+    ax2.axhline(70, linestyle='-', color='green')  # Overbought line
     ax2.legend()
 
     # Plotting the Stochastic RSI
@@ -92,8 +100,8 @@ def plot_chart(df, symbol, title):
     ax3.plot(df.index, df['stochrsi_d'], label='Stochastic RSI %D', color='red')
     ax3.set_xlabel('Timestamp')
     ax3.set_ylabel('Stochastic RSI')
-    ax3.axhline(0.2, linestyle='--', color='green')  # Oversold line
-    ax3.axhline(0.8, linestyle='--', color='red')  # Overbought line
+    ax3.axhline(0.2, linestyle='-', color='green')  # Oversold line
+    ax3.axhline(0.8, linestyle='-', color='red')  # Overbought line
     ax3.legend()
 
     plt.tight_layout()
@@ -122,16 +130,25 @@ async def main():
             try:
                 historical_data = get_historical_data(symbol, interval)
                 
+                # Calculate VWMA crosses
+                vwma_cross_over, vwma_cross_under = check_vwma_cross(historical_data)
+                
                 # Calculate RSI crosses
                 rsi_cross_over, rsi_cross_under = check_rsi_cross(historical_data)
 
-                # Create messages based on RSI crosses
+                # Create messages based on crosses
                 if rsi_cross_over:
-                    message = f'RSI 20 #crossed_above RSI 200 on #{symbol}'
+                    message = f'RSI 14 crossed above RSI 200 on #{symbol}'
                     title = f'RSI Cross Over for {symbol}'
                 elif rsi_cross_under:
-                    message = f'RSI 20 #crossed_below RSI 200 on #{symbol}'
+                    message = f'RSI 14 crossed below RSI 200 on #{symbol}'
                     title = f'RSI Cross Under for {symbol}'
+                elif vwma_cross_over:
+                    message = f'VWMA cross over detected on #{symbol}'
+                    title = f'VWMA Cross Over for {symbol}'
+                elif vwma_cross_under:
+                    message = f'VWMA cross under detected on #{symbol}'
+                    title = f'VWMA Cross Under for {symbol}'
                 else:
                     message = None
                 
