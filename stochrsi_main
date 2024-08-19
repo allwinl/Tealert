@@ -7,6 +7,7 @@ import nest_asyncio
 from telegram import Bot
 import config  # Import the config module
 import ta  # Import ta library
+import mplfinance as mpf  # Import mplfinance for candlestick plotting
 
 interval = '8h'  # 8-hour candlesticks
 
@@ -61,16 +62,23 @@ def plot_vwma_chart(df, symbol, title):
     # Calculate Stochastic RSI
     calculate_stoch_rsi(df)
 
+    # Set up plot
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
 
-    # Plotting the VWMA and price chart
-    ax1.plot(df.index, df['close'], label='Close Price', color='black')
-    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
-    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
-    ax1.set_xlabel('Timestamp')
-    ax1.set_ylabel('Price')
-    ax1.set_title(title)
-    ax1.legend()
+    # Plotting the candlestick chart with VWMA
+    mpf.plot(
+        df,
+        type='candle',
+        ax=ax1,
+        style='yahoo',
+        title=title,
+        ylabel='Price',
+        volume=False,
+        addplot=[
+            mpf.make_addplot(df['vwma_short'], color='red', ax=ax1),
+            mpf.make_addplot(df['vwma_long'], color='purple', ax=ax1)
+        ]
+    )
 
     # Plotting the RSI and its moving average
     ax2.plot(df.index, df['rsi'], label='RSI', color='blue')
