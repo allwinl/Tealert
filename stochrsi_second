@@ -1,3 +1,4 @@
+import asyncio
 import ccxt
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -6,7 +7,6 @@ from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import ta  # Import the ta library for technical analysis
 import config  # Import the config module
-import asyncio
 
 # Initialize Binance client
 binance = ccxt.binance({
@@ -46,8 +46,8 @@ def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
 
 # Function to check Stochastic RSI cross
 def check_stoch_rsi_cross(df):
-    cross_over = df['stoch_rsi_k'].iloc[-2] > df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] < df['stoch_rsi_d'].iloc[-3]
-    cross_under = df['stoch_rsi_k'].iloc[-2] < df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] > df['stoch_rsi_d'].iloc[-3]
+    cross_over = df['stoch_rsi_k'].iloc[-2] < df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-1] > df['stoch_rsi_d'].iloc[-1]
+    cross_under = df['stoch_rsi_k'].iloc[-2] > df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-1] < df['stoch_rsi_d'].iloc[-1]
     return cross_over, cross_under
 
 # Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
@@ -134,60 +134,63 @@ async def set_trading_pairs(update: Update, context: CallbackContext):
         updated_symbols_message = f'Trading pairs updated to: {", ".join(valid_symbols)}'
         await update.message.reply_text(updated_symbols_message)
 
+        # Start monitoring trading pairs
+        asyncio.create_task(monitor_trading_pairs())
+
 # Function to check trading pairs and send alerts if conditions are met
-async def check_trading_pairs():
+async def monitor_trading_pairs():
     global selected_symbols
-    symbols_to_remove = []
-    for symbol in selected_symbols:
-        try:
-            historical_data = get_historical_data(symbol, interval='4h')  # Changed to 4-hour interval
-            cross_over, cross_under = check_stoch_rsi_cross(historical_data)
-
-            if cross_over or cross_under:
-                if cross_over:
-                    message = f'Stoch RSI cross_over detected on {symbol}'
-                    title = f'Stoch RSI Cross Over for {symbol}'
-                else:
-                    message = f'Stoch RSI cross_under detected on {symbol}'
-                    title = f'Stoch RSI Cross Under for {symbol}'
-                
-                # Plot and get image buffer
-                image_buffer = plot_vwma_chart(historical_data, symbol, title)
-                await send_telegram_message(symbol, message, image_buffer)
-
-                # Add this symbol to the removal list
-                symbols_to_remove.append(symbol)
-
-        except Exception as e:
-            print(f"Error processing {symbol}: {e}")
-    
-    # Remove alerted symbols from the selected_symbols list
-    selected_symbols = [symbol for symbol in selected_symbols if symbol not in symbols_to_remove]
-
-# Periodic check function to run every 5 minutes
-async def periodic_check():
     while True:
-        await check_trading_pairs()
-        await asyncio.sleep(300)  # Sleep for 5 minutes
+        symbols_to_remove = []
+        for symbol in selected_symbols:
+            try:
+                historical_data = get_historical_data(symbol, interval='4h')
+                cross_over, cross_under = check_stoch_rsi_cross(historical_data)
 
-# Define an asynchronous main function
+                if cross_over or cross_under:
+                    if cross_over:
+                        message = f'Stoch RSI #cross_over detected on #{symbol}'
+                        title = f'Stoch RSI Cross Over for {symbol}'
+                    else:
+                        message = f'Stoch RSI #cross_under detected on #{symbol}'
+                        title = f'Stoch RSI Cross Under for {symbol}'
+
+                    # Plot and get image buffer
+                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+
+                    # Add this symbol to the removal list
+                    symbols_to_remove.append(symbol)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Remove alerted symbols from the selected_symbols list
+        selected_symbols = [symbol for symbol in selected_symbols if symbol not in symbols_to_remove]
+
+        # Notify user of the updated symbols list after removals
+        if symbols_to_remove:
+            updated_symbols_message = f'Updated Symbols after alerts: {", ".join(selected_symbols)}'
+            await telegram_bot.send_message(chat_id=config.CHAT_ID, text=updated_symbols_message)
+
+        # Wait for 5 minutes before the next check
+        await asyncio.sleep(300)
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
+
+# Initialize Application for handling Telegram updates
+application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+
+# Add handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_trading_pairs))
+
+# Start the Telegram bot and the monitoring loop
 async def main():
-    # Initialize Telegram Bot
-    global telegram_bot
-    telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
-    
-    # Initialize Application for handling Telegram updates
-    application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+    await application.start()
+    await application.updater.start_polling()
+    await application.idle()
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_trading_pairs))
-
-    # Start the Telegram bot polling and periodic check concurrently
-    await asyncio.gather(
-        application.run_polling(),
-        periodic_check()
-    )
-
-# Run the main function
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
