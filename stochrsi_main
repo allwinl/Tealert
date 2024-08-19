@@ -70,11 +70,11 @@ def plot_vwma_chart(df, symbol, title):
     # Calculate Stochastic RSI
     calculate_stoch_rsi(df)
 
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
-
     try:
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), gridspec_kw={'height_ratios': [3, 1, 1]})
+
         # Plotting the candlestick chart and VWMA
-        mpf.plot(df, type='candle', ax=ax1, style='charles', title=title, ylabel='Price')
+        mpf.plot(df, type='candle', ax=ax1, style='charles', ylabel='Price')
         ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
         ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
         ax1.legend()
@@ -98,12 +98,16 @@ def plot_vwma_chart(df, symbol, title):
         ax3.set_ylim(0, 100)  # Ensure the plot scales from 0 to 100
         ax3.legend()
 
+        plt.suptitle(title)
         plt.tight_layout()
 
         # Save plot to a BytesIO object
         buf = BytesIO()
         plt.savefig(buf, format='png')
         buf.seek(0)
+    except Exception as e:
+        print(f"Error while plotting {symbol}: {e}")
+        return None
     finally:
         # Ensure the figure is closed to avoid memory leaks
         plt.close(fig)
