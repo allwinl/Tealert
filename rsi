@@ -27,49 +27,38 @@ def get_historical_data(symbol, interval, limit=300):
     df.set_index('timestamp', inplace=True)
     return df
 
-# Function to calculate VWMA
-def calculate_vwma(df, period):
-    return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
-
 # Function to calculate RSI using ta library
 def calculate_rsi(df, period=14):
     return ta.momentum.RSIIndicator(df['close'], window=period).rsi()
 
-# Function to check VWMA cross
-def check_vwma_cross(df, short_period=3, long_period=7):
-    df['vwma_short'] = calculate_vwma(df, short_period)
-    df['vwma_long'] = calculate_vwma(df, long_period)
+# Function to check RSI cross
+def check_rsi_cross(df):
+    df['rsi_14'] = calculate_rsi(df, period=14)
+    df['rsi_200'] = calculate_rsi(df, period=200)
 
-    cross_over = df['vwma_short'].iloc[-2] > df['vwma_long'].iloc[-2] and df['vwma_short'].iloc[-3] <= df['vwma_long'].iloc[-3]
-    cross_under = df['vwma_short'].iloc[-2] < df['vwma_long'].iloc[-2] and df['vwma_short'].iloc[-3] >= df['vwma_long'].iloc[-3]
+    # Detect cross over and cross under
+    cross_over = df['rsi_14'].iloc[-3] < df['rsi_200'].iloc[-3] and df['rsi_14'].iloc[-2] > df['rsi_200'].iloc[-2]
+    cross_under = df['rsi_14'].iloc[-3] > df['rsi_200'].iloc[-3] and df['rsi_14'].iloc[-2] < df['rsi_200'].iloc[-2]
 
     return cross_over, cross_under
 
-# Function to plot VWMA chart and RSI, then return image buffer
-def plot_vwma_chart(df, symbol, title):
+# Function to plot RSI chart and return image buffer
+def plot_rsi_chart(df, symbol, title):
     # Calculate RSI
-    df['rsi'] = calculate_rsi(df, period=14)
+    df['rsi_14'] = calculate_rsi(df, period=20)
     df['rsi_200'] = calculate_rsi(df, period=200)
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1]})
-
-    # Plotting the VWMA and price chart
-    ax1.plot(df.index, df['close'], label='Close Price', color='black')
-    ax1.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='red')
-    ax1.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
-    ax1.set_xlabel('Timestamp')
-    ax1.set_ylabel('Price')
-    ax1.set_title(title)
-    ax1.legend()
+    fig, ax = plt.subplots(figsize=(12, 6))
 
     # Plotting the RSI
-    ax2.plot(df.index, df['rsi'], label='RSI (14)', color='blue')
-    ax2.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
-    ax2.set_xlabel('Timestamp')
-    ax2.set_ylabel('RSI')
-    ax2.axhline(30, linestyle='--', color='red')  # Oversold line
-    ax2.axhline(70, linestyle='--', color='green')  # Overbought line
-    ax2.legend()
+    ax.plot(df.index, df['rsi_14'], label='RSI (20)', color='blue')
+    ax.plot(df.index, df['rsi_200'], label='RSI (200)', color='green')
+    ax.set_xlabel('Timestamp')
+    ax.set_ylabel('RSI')
+    ax.axhline(30, linestyle='--', color='red')  # Oversold line
+    ax.axhline(70, linestyle='--', color='green')  # Overbought line
+    ax.set_title(title)
+    ax.legend()
 
     plt.tight_layout()
 
@@ -96,19 +85,19 @@ async def main():
         for symbol in config.SELECTED_SYMBOLS:
             try:
                 historical_data = get_historical_data(symbol, interval)
-                cross_over, cross_under = check_vwma_cross(historical_data)
+                cross_over, cross_under = check_rsi_cross(historical_data)
 
                 if cross_over:
-                    message = f'Cross over detected on #{symbol}'
-                    title = f'Cross Over for {symbol}'
+                    message = f'RSI 14 crossed above RSI 200 on #{symbol}'
+                    title = f'RSI Cross Over for {symbol}'
                     # Plot and get image buffer
-                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
+                    image_buffer = plot_rsi_chart(historical_data, symbol, title)
                     await send_telegram_message(symbol, message, image_buffer)
                 elif cross_under:
-                    message = f'Cross under detected on #{symbol}'
-                    title = f'Cross Under for {symbol}'
+                    message = f'RSI 14 crossed below RSI 200 on #{symbol}'
+                    title = f'RSI Cross Under for {symbol}'
                     # Plot and get image buffer
-                    image_buffer = plot_vwma_chart(historical_data, symbol, title)
+                    image_buffer = plot_rsi_chart(historical_data, symbol, title)
                     await send_telegram_message(symbol, message, image_buffer)
 
             except Exception as e:
