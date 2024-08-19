@@ -37,7 +37,7 @@ def calculate_rsi(df, period=14):
 
 # Function to calculate Stochastic RSI
 def calculate_stochrsi(df, period=14, smooth_k=3, smooth_d=3):
-    stoch_rsi = ta.momentum.StochasticOscillator(df['close'], window=period)
+    stoch_rsi = ta.momentum.StochasticOscillator(df['high'], df['low'], df['close'], window=period)
     df['stochrsi'] = stoch_rsi.stoch()
     df['stochrsi_k'] = df['stochrsi'].rolling(window=smooth_k).mean()
     df['stochrsi_d'] = df['stochrsi_k'].rolling(window=smooth_d).mean()
