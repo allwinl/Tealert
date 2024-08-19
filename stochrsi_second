@@ -188,6 +188,7 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_trad
 
 # Start the Telegram bot and the monitoring loop
 async def main():
+    await application.initialize()
     await application.start()
     await application.updater.start_polling()
     await application.idle()
