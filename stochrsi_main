@@ -44,8 +44,8 @@ def calculate_stoch_rsi(df, period=14, smooth1=3, smooth2=3):
 # Function to check Stochastic RSI cross
 def check_stoch_rsi_cross(df):
     calculate_stoch_rsi(df)
-    cross_over = df['stoch_rsi_k'].iloc[-2] > df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] <= df['stoch_rsi_d'].iloc[-3]
-    cross_under = df['stoch_rsi_k'].iloc[-2] < df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] >= df['stoch_rsi_d'].iloc[-3]
+    cross_over = df['stoch_rsi_k'].iloc[-2] > df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] < df['stoch_rsi_d'].iloc[-3]
+    cross_under = df['stoch_rsi_k'].iloc[-2] < df['stoch_rsi_d'].iloc[-2] and df['stoch_rsi_k'].iloc[-3] > df['stoch_rsi_d'].iloc[-3]
     return cross_over, cross_under
 
 # Function to plot VWMA chart, RSI, Stochastic RSI, and RSI's MA, then return image buffer
