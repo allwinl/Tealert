@@ -35,8 +35,8 @@ def calculate_macd(df, short_period=12, long_period=26, signal_period=9):
 
 # Function to check MACD cross
 def check_macd_cross(df):
-    cross_over = df['macd'].iloc[-2] > df['signal'].iloc[-2] and df['macd'].iloc[-3] <= df['signal'].iloc[-3]
-    cross_under = df['macd'].iloc[-2] < df['signal'].iloc[-2] and df['macd'].iloc[-3] >= df['signal'].iloc[-3]
+    cross_over = df['histogram'].iloc[-2] > df['histogram'].iloc[-3] #and df['macd'].iloc[-3] <= df['signal'].iloc[-3]
+    cross_under = df['histogram'].iloc[-2] < df['histogram'].iloc[-3] #and df['macd'].iloc[-3] >= df['signal'].iloc[-3]
     return cross_over, cross_under
 
 # Function to send Telegram message (without image)
