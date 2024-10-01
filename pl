@@ -3,12 +3,12 @@ import requests
 import time
 
 # Binance API credentials
-api_key = 'YOUR_BINANCE_API_KEY'
-api_secret = 'YOUR_BINANCE_API_SECRET'
+api_key = 'Hqod6Y5MDAkMmAJbRKOqUUDsYb9HG5aAkE3BMPZxHrm8JdZTgfIJr2RKSkRiOlDM'
+api_secret = 'wVI5YTy9Y3dhiU1KoOSc0ysMVsAvaklSHDm40ZqkaHzKGgjlq9zlmi5CSF3n2wGw'
 
 # Telegram credentials
-bot_token = 'YOUR_TELEGRAM_BOT_TOKEN'
-chat_id = 'YOUR_CHAT_ID'
+bot_token = '7426543281:AAHu4Qf_KT6sGBaqUJU5ccFKZroHKrVc9R0'
+chat_id = '1385370555'
 
 # Initialize Binance client
 binance = ccxt.binance({
@@ -34,7 +34,7 @@ def send_telegram_message(message):
     requests.get(url, params=params)
 
 def monitor_profit():
-    profit_threshold = 10  # Set your profit threshold
+    profit_threshold = .01  # Set your profit threshold
 
     while True:
         unrealized_profit = get_unrealized_profit()
