@@ -1,0 +1,79 @@
+import ccxt
+import pandas as pd
+import asyncio
+import nest_asyncio
+from telegram import Bot
+import config  # Import the config module
+import ta  # Import ta library
+
+interval = '1d'  # Daily candlesticks
+
+# Initialize Binance client
+binance = ccxt.binance({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=50):
+    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate MACD using ta library
+def calculate_macd(df, short_period=12, long_period=26, signal_period=9):
+    macd = ta.trend.MACD(df['close'], window_slow=long_period, window_fast=short_period, window_sign=signal_period)
+    df['macd'] = macd.macd()
+    df['signal'] = macd.macd_signal()
+    df['histogram'] = macd.macd_diff()  # The difference between MACD and Signal, used as a histogram
+    return df
+
+# Function to check MACD cross
+def check_macd_cross(df):
+    cross_over = df['macd'].iloc[-2] > df['signal'].iloc[-2] and df['macd'].iloc[-3] <= df['signal'].iloc[-3]
+    cross_under = df['macd'].iloc[-2] < df['signal'].iloc[-2] and df['macd'].iloc[-3] >= df['signal'].iloc[-3]
+    return cross_over, cross_under
+
+# Function to send Telegram message (without image)
+async def send_telegram_message(symbol, message):
+    # Check if the current message is the same as the previous one for this symbol
+    if last_alert_messages.get(symbol) != message:
+        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+        # Update the last alert message for this symbol
+        last_alert_messages[symbol] = message
+
+# Main function (async)
+async def main():
+    while True:
+        for symbol in config.SELECTED_SYMBOLS:
+            try:
+                historical_data = get_historical_data(symbol, interval)
+                historical_data = calculate_macd(historical_data)
+                cross_over, cross_under = check_macd_cross(historical_data)
+
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    await send_telegram_message(symbol, message)
+                elif cross_under:
+                    message = f'Cross under detected on #{symbol}'
+                    await send_telegram_message(symbol, message)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Sleep for a specified interval before checking again
+        await asyncio.sleep(300)  # Adjust the sleep duration as needed
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
+
+# Use nest_asyncio to allow running asyncio in Jupyter notebooks
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
