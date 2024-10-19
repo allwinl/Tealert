@@ -74,14 +74,13 @@ def plot_candles_with_ema(df, symbol, title):
     axlist[0].plot(df.index, df['ema_short'], label='Short-term EMA (3)', color='red', linestyle='--')
     axlist[0].plot(df.index, df['ema_long'], label='Long-term EMA (7)', color='purple', linestyle='--')
 
-    # Add Title and Legend
-    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='fantasy')
+    # Add Title and Legend with a more commonly available font
+    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')  # Changed fontfamily
     axlist[0].legend()
 
-    # Adjust layout and save plot to a BytesIO object
-    plt.tight_layout()
+    # Adjust layout and save plot to a BytesIO object (removed plt.tight_layout)
     buf = BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', bbox_inches='tight')  # Added bbox_inches='tight'
     buf.seek(0)
 
     # Close the figure to avoid memory overflow
