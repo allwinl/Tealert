@@ -26,6 +26,9 @@ def get_historical_data(symbol, interval, limit=50):
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
+    
+    # Renaming columns to ensure they match the expected format
+    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
     return df
 
 # Function to calculate EMA using ta library
