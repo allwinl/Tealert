@@ -42,27 +42,38 @@ def check_ema_cross(df, short_period=3, long_period=7):
 
     return cross_over, cross_under
 
-# Function to plot candlesticks and EMA chart, and return an image buffer
+# Updated function to plot candlesticks with EMA chart, and return an image buffer
 def plot_candles_with_ema(df, symbol, title):
-    # Taking the last 20 days of data for plotting
-    df_last_20 = df[-20:].copy()
-
     # Ensure the index is in datetime format and the data is in the correct format for mplfinance
-    mpf_data = df_last_20[['open', 'high', 'low', 'close']]
+    mpf_data = df[['Open', 'High', 'Low', 'Close']].copy()
 
-    # Create a figure and axis for the candlestick and EMA plot
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # Calculate EMA for short and long periods
+    df['ema_short'] = calculate_ema(df, short_period=3)
+    df['ema_long'] = calculate_ema(df, long_period=7)
 
-    # Plot the candlesticks using the provided axis
-    mpf.plot(mpf_data, type='candle', ax=ax, style='charles')
+    # Create custom market colors for up and down candlesticks
+    mc = mpf.make_marketcolors(up='#2fc71e', down='#ed2f1a', inherit=True)
+
+    # Create a custom style using the market colors and other style settings
+    s = mpf.make_mpf_style(base_mpl_style=['bmh', 'dark_background'], marketcolors=mc, y_on_right=True)
+
+    # Prepare the plot figure with a custom ratio and return figure for further customization
+    fig, axlist = mpf.plot(mpf_data,
+                           figratio=(10, 6),
+                           type="candle",
+                           style=s,
+                           tight_layout=True,
+                           datetime_format='%H:%M',
+                           ylabel="Precio ($)",
+                           returnfig=True)
 
     # Plot the EMAs on top of the candlestick chart
-    ax.plot(df_last_20.index, df_last_20['ema_short'], label='Short-term EMA (3)', color='red', linestyle='--')
-    ax.plot(df_last_20.index, df_last_20['ema_long'], label='Long-term EMA (7)', color='purple', linestyle='--')
+    axlist[0].plot(df.index, df['ema_short'], label='Short-term EMA (3)', color='red', linestyle='--')
+    axlist[0].plot(df.index, df['ema_long'], label='Long-term EMA (7)', color='purple', linestyle='--')
 
-    # Add a title and legend manually
-    ax.set_title(title)
-    ax.legend()
+    # Add Title and Legend
+    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='fantasy')
+    axlist[0].legend()
 
     # Adjust layout and save plot to a BytesIO object
     plt.tight_layout()
