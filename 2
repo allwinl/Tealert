@@ -36,7 +36,7 @@ def calculate_ema(df, period):
     return ta.trend.EMAIndicator(df['Close'], window=period).ema_indicator()
 
 # Function to check EMA cross
-def check_ema_cross(df, short_period=3, long_period=7):
+def check_ema_cross(df, short_period=5, long_period=10):
     df['ema_short'] = calculate_ema(df, period=short_period)  # Pass period directly
     df['ema_long'] = calculate_ema(df, period=long_period)  # Pass period directly
 
@@ -126,7 +126,7 @@ async def main():
                 print(f"Error processing {symbol}: {e}")
 
         # Sleep for a specified interval before checking again
-        await asyncio.sleep(300)  # Adjust the sleep duration as needed
+        await asyncio.sleep(3600)  # Adjust the sleep duration as needed
 
 # Initialize Telegram Bot
 telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
