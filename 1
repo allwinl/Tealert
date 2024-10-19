@@ -27,13 +27,13 @@ def get_historical_data(symbol, interval, limit=50):
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     
-    # Renaming columns to ensure they match the expected format
+    # Renaming columns to match the expected format
     df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
     return df
 
 # Function to calculate EMA using ta library
 def calculate_ema(df, period):
-    return ta.trend.EMAIndicator(df['close'], window=period).ema_indicator()
+    return ta.trend.EMAIndicator(df['Close'], window=period).ema_indicator()
 
 # Function to check EMA cross
 def check_ema_cross(df, short_period=3, long_period=7):
