@@ -1,12 +1,13 @@
 import ccxt
 import pandas as pd
 import matplotlib.pyplot as plt
-from ta.trend import ema_indicator  # You can remove this if not using EMA
+import mplfinance as mpf
+from io import BytesIO
 import asyncio
 import nest_asyncio
 from telegram import Bot
-from io import BytesIO
 import config  # Import the config module
+import ta  # Import ta library
 
 interval = '1d'  # 1-day candlesticks
 
@@ -19,81 +20,113 @@ binance = ccxt.binance({
 # Dictionary to store the last alert messages for each symbol
 last_alert_messages = {}
 
-# Function to get historical candlestick data for futures
-def get_historical_data(symbol, interval, limit=100):
-    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit, params={'type': 'future'})
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=50):
+    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
+    
+    # Renaming columns to match the expected format
+    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
     return df
 
-# Function to calculate VWMA
-def calculate_vwma(df, period):
-    return (df['close'] * df['volume']).rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+# Function to calculate EMA using ta library
+def calculate_ema(df, period):
+    return ta.trend.EMAIndicator(df['Close'], window=period).ema_indicator()
 
-# Function to check VWMA cross
-def check_vwma_cross(df, short_period=12, long_period=26):
-    df['vwma_short'] = calculate_vwma(df, short_period)
-    df['vwma_long'] = calculate_vwma(df, long_period)
+# Function to check EMA cross
+def check_ema_cross(df, short_period=3, long_period=7):
+    df['ema_short'] = calculate_ema(df, period=short_period)  # Pass period directly
+    df['ema_long'] = calculate_ema(df, period=long_period)  # Pass period directly
 
-    cross_over = df['vwma_short'][-2] > df['vwma_long'][-2] and df['vwma_short'][-3] <= df['vwma_long'][-3]
-    cross_under = df['vwma_short'][-2] < df['vwma_long'][-2] and df['vwma_short'][-3] >= df['vwma_long'][-3]
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
 
     return cross_over, cross_under
 
-# Function to plot VWMA chart and return image buffer
-def plot_vwma_chart(df, symbol):
-    plt.figure(figsize=(12, 6))
-    plt.plot(df.index, df['close'], label='Close Price')
-    plt.plot(df.index, df['vwma_short'], label='Short-term VWMA', linestyle='--', color='orange')
-    plt.plot(df.index, df['vwma_long'], label='Long-term VWMA', linestyle='--', color='purple')
-    plt.xlabel('Timestamp')
-    plt.ylabel('Price')
-    plt.title(f'VWMA Crossover for {symbol}')
-    plt.legend()
-    
-    # Save plot to a BytesIO object
+# Updated function to plot candlesticks with EMA chart, and return an image buffer
+def plot_candles_with_ema(df, symbol, title):
+    # Ensure the index is in datetime format and the data is in the correct format for mplfinance
+    mpf_data = df[['Open', 'High', 'Low', 'Close']].copy()
+
+    # Calculate EMA for short and long periods
+    df['ema_short'] = calculate_ema(df, period=3)  # Updated period argument
+    df['ema_long'] = calculate_ema(df, period=7)   # Updated period argument
+
+    # Create custom market colors for up and down candlesticks
+    mc = mpf.make_marketcolors(up='#2fc71e', down='#ed2f1a', inherit=True)
+
+    # Create a custom style using the market colors and other style settings
+    s = mpf.make_mpf_style(base_mpl_style=['bmh', 'dark_background'], marketcolors=mc, y_on_right=True)
+
+    # Prepare the plot figure with a custom ratio and return figure for further customization
+    fig, axlist = mpf.plot(mpf_data,
+                           figratio=(10, 6),
+                           type="candle",
+                           style=s,
+                           tight_layout=True,
+                           datetime_format='%H:%M',
+                           ylabel="Precio ($)",
+                           returnfig=True)
+
+    # Plot the EMAs on top of the candlestick chart
+    axlist[0].plot(df.index, df['ema_short'], label='Short-term EMA (3)', color='red', linestyle='--')
+    axlist[0].plot(df.index, df['ema_long'], label='Long-term EMA (7)', color='purple', linestyle='--')
+
+    # Add Title and Legend with a more commonly available font
+    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')  # Changed fontfamily
+    axlist[0].legend()
+
+    # Adjust layout and save plot to a BytesIO object (removed plt.tight_layout)
     buf = BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', bbox_inches='tight')  # Added bbox_inches='tight'
     buf.seek(0)
-    plt.close()
+
+    # Close the figure to avoid memory overflow
+    plt.close(fig)
+
     return buf
 
 # Function to send Telegram message and image (now defined as async)
 async def send_telegram_message(symbol, message, image_buffer):
     # Check if the current message is the same as the previous one for this symbol
     if last_alert_messages.get(symbol) != message:
-        await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
-        # Send image
-        await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
-        # Update the last alert message for this symbol
-        last_alert_messages[symbol] = message
+        try:
+            await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+            # Send image
+            await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+            # Update the last alert message for this symbol
+            last_alert_messages[symbol] = message
+        except Exception as e:
+            print(f"Error sending message for {symbol}: {e}")
 
 # Main function (now defined as async)
 async def main():
-    # Get all perpetual futures pairs on Binance
-    all_trading_pairs = binance.fetch_markets()
-
     while True:
-        for trading_pair in all_trading_pairs:
-            symbol = trading_pair['symbol']
-            # Filter only perpetual futures trading pairs
-            if trading_pair['type'] == 'future':
-                try:
-                    historical_data = get_historical_data(symbol, interval)
-                    cross_over, cross_under = check_vwma_cross(historical_data)
+        for symbol in config.SELECTED_SYMBOLS:
+            try:
+                historical_data = get_historical_data(symbol, interval)
+                cross_over, cross_under = check_ema_cross(historical_data)
 
-                    if cross_over or cross_under:
-                        message = f'VWMA Cross detected on {symbol} ({interval}).'
-                        # Plot and get image buffer
-                        image_buffer = plot_vwma_chart(historical_data, symbol)
-                        await send_telegram_message(symbol, message, image_buffer)
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    title = f'Cross Over for {symbol}'
+                    # Plot and get image buffer
+                    image_buffer = plot_candles_with_ema(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+                elif cross_under:
+                    message = f'Cross under detected on #{symbol}'
+                    title = f'Cross Under for {symbol}'
+                    # Plot and get image buffer
+                    image_buffer = plot_candles_with_ema(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
 
-                except Exception as e:
-                    print(f"Error processing {symbol}: {e}")
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
 
         # Sleep for a specified interval before checking again
-        await asyncio.sleep(60)  # Adjust the sleep duration as needed
+        await asyncio.sleep(300)  # Adjust the sleep duration as needed
 
 # Initialize Telegram Bot
 telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
