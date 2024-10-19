@@ -37,8 +37,8 @@ def calculate_ema(df, period):
 
 # Function to check EMA cross
 def check_ema_cross(df, short_period=3, long_period=7):
-    df['ema_short'] = calculate_ema(df, short_period)
-    df['ema_long'] = calculate_ema(df, long_period)
+    df['ema_short'] = calculate_ema(df, period=short_period)  # Pass period directly
+    df['ema_long'] = calculate_ema(df, period=long_period)  # Pass period directly
 
     cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
     cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
@@ -51,8 +51,8 @@ def plot_candles_with_ema(df, symbol, title):
     mpf_data = df[['Open', 'High', 'Low', 'Close']].copy()
 
     # Calculate EMA for short and long periods
-    df['ema_short'] = calculate_ema(df, short_period=3)
-    df['ema_long'] = calculate_ema(df, long_period=7)
+    df['ema_short'] = calculate_ema(df, period=3)  # Updated period argument
+    df['ema_long'] = calculate_ema(df, period=7)   # Updated period argument
 
     # Create custom market colors for up and down candlesticks
     mc = mpf.make_marketcolors(up='#2fc71e', down='#ed2f1a', inherit=True)
