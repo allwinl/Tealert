@@ -53,7 +53,7 @@ def plot_candles_with_ema(df, symbol, title):
     # Prepare the data for mplfinance candlestick plotting
     mpf_data = df_last_20[['open', 'high', 'low', 'close']]
 
-    # Plot the candlesticks
+    # Plot the candlesticks using the provided axis
     mpf.plot(mpf_data, type='candle', ax=ax, style='charles', title=title)
 
     # Plot the EMAs on top of the candlestick chart
@@ -68,7 +68,9 @@ def plot_candles_with_ema(df, symbol, title):
     buf = BytesIO()
     plt.savefig(buf, format='png')
     buf.seek(0)
-    plt.close()
+
+    # Close the figure to avoid memory overflow
+    plt.close(fig)
 
     return buf
 
