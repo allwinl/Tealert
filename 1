@@ -54,13 +54,14 @@ def plot_candles_with_ema(df, symbol, title):
     mpf_data = df_last_20[['open', 'high', 'low', 'close']]
 
     # Plot the candlesticks using the provided axis
-    mpf.plot(mpf_data, type='candle', ax=ax, style='charles', title=title)
+    mpf.plot(mpf_data, type='candle', ax=ax, style='charles')
 
     # Plot the EMAs on top of the candlestick chart
     ax.plot(df_last_20.index, df_last_20['ema_short'], label='Short-term EMA (3)', color='red', linestyle='--')
     ax.plot(df_last_20.index, df_last_20['ema_long'], label='Long-term EMA (7)', color='purple', linestyle='--')
 
-    # Add a legend
+    # Add a title and legend manually
+    ax.set_title(title)
     ax.legend()
 
     # Adjust layout and save plot to a BytesIO object
