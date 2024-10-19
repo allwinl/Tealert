@@ -45,13 +45,13 @@ def check_ema_cross(df, short_period=3, long_period=7):
 # Function to plot candlesticks and EMA chart, and return an image buffer
 def plot_candles_with_ema(df, symbol, title):
     # Taking the last 20 days of data for plotting
-    df_last_20 = df[-20:]
+    df_last_20 = df[-20:].copy()
+
+    # Ensure the index is in datetime format and the data is in the correct format for mplfinance
+    mpf_data = df_last_20[['open', 'high', 'low', 'close']]
 
     # Create a figure and axis for the candlestick and EMA plot
     fig, ax = plt.subplots(figsize=(12, 6))
-
-    # Prepare the data for mplfinance candlestick plotting
-    mpf_data = df_last_20[['open', 'high', 'low', 'close']]
 
     # Plot the candlesticks using the provided axis
     mpf.plot(mpf_data, type='candle', ax=ax, style='charles')
