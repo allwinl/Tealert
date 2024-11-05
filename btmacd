@@ -45,6 +45,9 @@ def calculate_macd(df):
 
 # Function to check MACD cross
 def check_macd_cross(df):
+    if 'histogram' not in df:
+        return False, False
+    
     histogram_prev = df['histogram'].iloc[-3]
     histogram_curr = df['histogram'].iloc[-2]
 
@@ -123,9 +126,17 @@ async def main():
     while True:
         for symbol in bitgetconfig.SELECTED_SYMBOLS:
             try:
+                # Fetch historical data
                 historical_data = get_historical_data(symbol, interval)
+                
+                # Calculate MACD to ensure columns are available
+                calculate_macd(historical_data)
+                
+                # Check MACD and EMA crossovers
                 cross_over, cross_under = check_macd_cross(historical_data)
+                ema_cross_over, ema_cross_under = check_ema_cross(historical_data)
 
+                # MACD cross events
                 if cross_over:
                     message = f'MACD Cross over detected on #{symbol}'
                     title = f'MACD Cross Over for {symbol}'
