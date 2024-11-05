@@ -81,8 +81,13 @@ def plot_candles(df, symbol, title):
     long_ema = calculate_ema(df, 7)
     calculate_macd(df)  # Calculate MACD values for plotting
 
-    # Set colors for the MACD histogram
-    macd_colors = ['green' if val > 0 else 'red' for val in df['histogram']]
+    # Set dynamic colors for the MACD histogram based on the comparison with the previous value
+    macd_colors = [
+        'green' if df['histogram'].iloc[i] > df['histogram'].iloc[i - 1] else 'red'
+        for i in range(1, len(df['histogram']))
+    ]
+    # The first histogram bar doesn't have a previous bar, so we add a neutral color for it
+    macd_colors.insert(0, 'gray')
 
     # Plot figure with custom ratio and return it for further customization
     fig, axlist = mpf.plot(
