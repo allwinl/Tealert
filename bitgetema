@@ -1,0 +1,124 @@
+import ccxt
+import pandas as pd
+import matplotlib.pyplot as plt
+import mplfinance as mpf
+from io import BytesIO
+import asyncio
+import nest_asyncio
+from telegram import Bot
+import bitgetconfig  # Import the bitgetconfig module
+import ta  # Import ta library
+
+interval = '1d'  # Adjust to '4h' if you need 4-hour candlesticks
+
+# Initialize Bitget client
+bitget = ccxt.bitget({
+    'apiKey': bitgetconfig.API_KEY,
+    'secret': bitgetconfig.API_SECRET,
+    'password': bitgetconfig.PASSPHRASE,  # Bitget requires a passphrase
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=50):
+    ohlcv = bitget.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    
+    # Rename columns to match mplfinance format
+    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    return df
+
+# Function to calculate EMA using ta library
+def calculate_ema(df, period):
+    return ta.trend.EMAIndicator(df['Close'], window=period).ema_indicator()
+
+# Function to calculate RSI using ta library
+def calculate_rsi(df, period):
+    return ta.momentum.RSIIndicator(df['Close'], window=period).rsi()
+
+# Function to check EMA cross
+def check_ema_cross(df, short_period=3, long_period=7):
+    df['ema_short'] = calculate_ema(df, short_period)
+    df['ema_long'] = calculate_ema(df, long_period)
+
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
+
+    return cross_over, cross_under
+
+# Updated function to plot candlesticks and return an image buffer
+def plot_candles(df, symbol, title):
+    mpf_data = df[['Open', 'High', 'Low', 'Close']].copy()
+    
+    # Create custom market colors for up and down candlesticks
+    mc = mpf.make_marketcolors(up='#2fc71e', down='#ed2f1a', inherit=True)
+
+    # Create a custom style using the market colors and other style settings
+    s = mpf.make_mpf_style(base_mpl_style=['bmh', 'dark_background'], marketcolors=mc, y_on_right=True)
+
+    # Plot figure with custom ratio and return it for further customization
+    fig, axlist = mpf.plot(mpf_data,
+                           figratio=(10, 6),
+                           type="candle",
+                           style=s,
+                           tight_layout=True,
+                           datetime_format='%H:%M',
+                           ylabel="Price ($)",
+                           returnfig=True)
+
+    # Add Title
+    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')
+
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
+
+    # Close the figure to avoid memory overflow
+    plt.close(fig)
+
+    return buf
+
+# Function to send Telegram message and image
+async def send_telegram_message(symbol, message, image_buffer):
+    if last_alert_messages.get(symbol) != message:
+        await telegram_bot.send_message(chat_id=bitgetconfig.CHAT_ID, text=message)
+        await telegram_bot.send_photo(chat_id=bitgetconfig.CHAT_ID, photo=image_buffer)
+        last_alert_messages[symbol] = message
+
+# Main function
+async def main():
+    while True:
+        for symbol in bitgetconfig.SELECTED_SYMBOLS:
+            try:
+                historical_data = get_historical_data(symbol, interval)
+                cross_over, cross_under = check_ema_cross(historical_data)
+
+                if cross_over:
+                    message = f'Cross over detected on #{symbol}'
+                    title = f'Cross Over for {symbol}'
+                    image_buffer = plot_candles(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+                elif cross_under:
+                    message = f'Cross under detected on #{symbol}'
+                    title = f'Cross Under for {symbol}'
+                    image_buffer = plot_candles(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        await asyncio.sleep(300)  # Sleep duration as needed
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=bitgetconfig.TELEGRAM_TOKEN)
+
+# Use nest_asyncio for Jupyter compatibility
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
