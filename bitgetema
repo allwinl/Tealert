@@ -50,7 +50,7 @@ def check_ema_cross(df, short_period=3, long_period=7):
 
     return cross_over, cross_under
 
-# Updated function to plot candlesticks and return an image buffer
+# Updated function to plot candlesticks with EMA lines and return an image buffer
 def plot_candles(df, symbol, title):
     mpf_data = df[['Open', 'High', 'Low', 'Close']].copy()
     
@@ -60,15 +60,25 @@ def plot_candles(df, symbol, title):
     # Create a custom style using the market colors and other style settings
     s = mpf.make_mpf_style(base_mpl_style=['bmh', 'dark_background'], marketcolors=mc, y_on_right=True)
 
+    # Add EMA lines to the DataFrame
+    short_ema = calculate_ema(df, 3)
+    long_ema = calculate_ema(df, 7)
+
     # Plot figure with custom ratio and return it for further customization
-    fig, axlist = mpf.plot(mpf_data,
-                           figratio=(10, 6),
-                           type="candle",
-                           style=s,
-                           tight_layout=True,
-                           datetime_format='%H:%M',
-                           ylabel="Price ($)",
-                           returnfig=True)
+    fig, axlist = mpf.plot(
+        mpf_data,
+        figratio=(10, 6),
+        type="candle",
+        style=s,
+        tight_layout=True,
+        datetime_format='%H:%M',
+        ylabel="Price ($)",
+        addplot=[
+            mpf.make_addplot(short_ema, color='cyan', linewidth=1.5, linestyle='-'),
+            mpf.make_addplot(long_ema, color='magenta', linewidth=1.5, linestyle='-')
+        ],
+        returnfig=True
+    )
 
     # Add Title
     axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')
