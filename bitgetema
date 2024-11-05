@@ -74,8 +74,8 @@ def plot_candles(df, symbol, title):
         datetime_format='%H:%M',
         ylabel="Price ($)",
         addplot=[
-            mpf.make_addplot(short_ema, color='cyan', linewidth=1.5, linestyle='-'),
-            mpf.make_addplot(long_ema, color='magenta', linewidth=1.5, linestyle='-')
+            mpf.make_addplot(short_ema, color='cyan', width=1.5, linestyle='-'),
+            mpf.make_addplot(long_ema, color='magenta', width=1.5, linestyle='-')
         ],
         returnfig=True
     )
