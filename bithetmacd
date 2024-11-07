@@ -9,7 +9,7 @@ from telegram import Bot
 import bitgetconfig  # Import the bitgetconfig module
 import ta  # Import ta library
 
-interval = '1d'  # Adjust to '4h' if you need 4-hour candlesticks
+interval = '1s'  # Adjust to '4h' if you need 4-hour candlesticks
 
 # Initialize Bitget client
 bitget = ccxt.bitget({
@@ -140,7 +140,7 @@ async def main():
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
 
-        await asyncio.sleep(300)  # Sleep duration as needed
+        await asyncio.sleep(1)  # Sleep duration as needed
 
 # Initialize Telegram Bot
 telegram_bot = Bot(token=bitgetconfig.TELEGRAM_TOKEN)
