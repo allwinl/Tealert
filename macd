@@ -51,8 +51,8 @@ def check_macd_cross(df):
     histogram_prev4 = df['histogram'].iloc[-4]
     histogram_curr = df['histogram'].iloc[-2]
 
-    cross_over = histogram_curr > histogram_prev and histogram_pre < histogram_prev4
-    cross_under = histogram_curr < histogram_prev and histogram_pre > histogram_prev4
+    cross_over = histogram_curr > histogram_prev and histogram_prev < histogram_prev4
+    cross_under = histogram_curr < histogram_prev and histogram_prev > histogram_prev4
 
     return cross_over, cross_under
 
