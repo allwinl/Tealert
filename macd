@@ -9,7 +9,7 @@ from telegram import Bot
 import config  # Import the config module (assuming similar config as Bitget)
 import ta  # Import ta library
 
-interval = '1d'  # Adjust to '4h' if you need 4-hour candlesticks
+interval = '1w'  # Adjust to '4h' if you need 4-hour candlesticks
 
 # Initialize binance client
 binance = ccxt.binance({
@@ -48,10 +48,11 @@ def check_macd_cross(df):
         return False, False
     
     histogram_prev = df['histogram'].iloc[-3]
+    histogram_prev4 = df['histogram'].iloc[-4]
     histogram_curr = df['histogram'].iloc[-2]
 
-    cross_over = histogram_curr > histogram_prev
-    cross_under = histogram_prev > histogram_curr
+    cross_over = histogram_curr > histogram_prev and histogram_pre < histogram_prev4
+    cross_under = histogram_curr < histogram_prev and histogram_pre > histogram_prev4
 
     return cross_over, cross_under
 
